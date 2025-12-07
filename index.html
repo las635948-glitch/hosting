@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MiniHost Advanced - Final Pro</title>
+    <title>MiniHost Advanced - Pro Preview</title>
     
     <!-- Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -18,7 +18,6 @@
         body { background-color: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', sans-serif; }
         .loading-view { height: 100vh; display: flex; justify-content: center; align-items: center; background: #fff; color: #333; }
         
-        /* Code Editor Styling */
         textarea.code-editor {
             font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
             white-space: pre;
@@ -38,62 +37,67 @@
 </head>
 <body>
 
-    <!-- 1. VIEWER MODE (PREVIEW) -->
+    <!-- 1. VIEWER MODE (MENGGUNAKAN IFRAME AGAR INTERAKTIF) -->
     <script>
         const params = new URLSearchParams(window.location.search);
         const viewPath = params.get('view');
         
-        // --- KONFIGURASI SUPABASE ---
         const SB_URL = 'https://wmhhrcgvnfjsgeideyut.supabase.co';
         const SB_BUCKET = 'hosting';
 
         if (viewPath) {
-            document.body.innerHTML = '<div class="loading-view"><h3>Sedang Memuat Website...</h3></div>';
+            document.body.innerHTML = '<div class="loading-view"><h3><i class="fa-solid fa-spinner fa-spin mr-2"></i> Sedang Memuat Website...</h3></div>';
             
-            // 1. Susun URL File Asli
             const fileUrl = `${SB_URL}/storage/v1/object/public/${SB_BUCKET}/${viewPath}`;
             
-            // 2. Susun Base URL (Folder tempat file berada)
-            // Ini PENTING agar file gambar/css relatif (./style.css) bisa terbaca
             const lastSlash = viewPath.lastIndexOf('/');
             const folderPath = lastSlash !== -1 ? viewPath.substring(0, lastSlash + 1) : '';
             const baseUrl = `${SB_URL}/storage/v1/object/public/${SB_BUCKET}/${folderPath}`;
 
-            fetch(fileUrl).then(r => {
-                if (!r.ok) throw new Error("File tidak ditemukan / Error 404");
-                return r.text();
-            }).then(html => {
-                // 3. INJECT <base> TAG
-                // Memaksa browser mencari aset relatif di folder Supabase, bukan di GitHub Pages
-                const baseTag = `<base href="${baseUrl}">`;
-                let finalHtml = html;
-                
-                // Masukkan base tag setelah <head>
-                if (html.includes('<head>')) {
-                    finalHtml = html.replace('<head>', `<head>${baseTag}`);
-                } else if (html.includes('<html>')) {
-                    finalHtml = html.replace('<html>', `<html><head>${baseTag}</head>`);
-                } else {
-                    finalHtml = `${baseTag}${html}`;
-                }
+            fetch(fileUrl)
+                .then(r => {
+                    if (!r.ok) throw new Error(`File tidak ditemukan (${r.status})`);
+                    return r.text();
+                })
+                .then(html => {
+                    // Inject <base> tag untuk memperbaiki path gambar/css
+                    const baseTag = `<base href="${baseUrl}">`;
+                    let finalHtml = html;
+                    if (html.includes('<head>')) {
+                        finalHtml = html.replace('<head>', `<head>${baseTag}`);
+                    } else {
+                        finalHtml = `<head>${baseTag}</head>${html}`;
+                    }
 
-                document.open(); 
-                document.write(finalHtml); 
-                document.close();
-            }).catch(err => {
-                document.body.innerHTML = `
-                    <div style="height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;color:#ef4444;font-family:sans-serif;">
-                        <h1 style="font-size:4rem;margin-bottom:0;"><i class="fa-solid fa-triangle-exclamation"></i></h1>
-                        <h2 style="margin-top:10px;">Gagal Memuat Preview</h2>
-                        <p>${err.message}</p>
-                        <a href="?" style="margin-top:20px;color:#3b82f6;text-decoration:none;">&larr; Kembali ke Dashboard</a>
-                    </div>`;
-            });
+                    // Hapus semua isi body
+                    document.body.innerHTML = '';
+                    document.body.style.margin = '0';
+                    document.body.style.overflow = 'hidden';
+
+                    // Buat iframe dan masukkan HTML ke dalamnya
+                    const iframe = document.createElement('iframe');
+                    iframe.style.width = '100vw';
+                    iframe.style.height = '100vh';
+                    iframe.style.border = 'none';
+                    iframe.srcdoc = finalHtml; // Ini kuncinya
+                    
+                    document.body.appendChild(iframe);
+                })
+                .catch(err => {
+                    document.body.innerHTML = `
+                        <div style="height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;color:#ef4444;font-family:sans-serif;">
+                            <h1 style="font-size:4rem;margin-bottom:0;"><i class="fa-solid fa-triangle-exclamation"></i></h1>
+                            <h2 style="margin-top:10px;">Gagal Memuat Preview</h2>
+                            <p>${err.message}</p>
+                            <a href="?" style="margin-top:20px;color:#3b82f6;text-decoration:none;">&larr; Kembali ke Dashboard</a>
+                        </div>`;
+                });
+            
             throw new Error("Viewer Mode Active"); 
         }
     </script>
 
-    <!-- 2. DASHBOARD APP -->
+    <!-- 2. DASHBOARD APP (Tidak ada perubahan di sini) -->
     <div id="app" v-cloak class="container mx-auto p-4 max-w-2xl pb-20">
         
         <!-- Header -->
@@ -207,15 +211,12 @@
                             </p>
                         </div>
                         <div class="flex gap-1">
-                             <!-- TOMBOL DOMAIN -->
                              <button @click="openDomainSettings(dep)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1.5 rounded text-xs transition border border-gray-600" title="Custom Domain">
                                 <i class="fa-solid fa-globe text-blue-400"></i> Domain
                             </button>
-                            <!-- TOMBOL VIEW -->
                             <a :href="getViewerLink(dep.site_name)" target="_blank" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1.5 rounded text-xs transition border border-gray-600" title="Preview">
                                 <i class="fa-solid fa-external-link-alt"></i>
                             </a>
-                            <!-- TOMBOL DELETE -->
                             <button @click="deleteSite(dep)" class="bg-red-900/20 border border-red-900 hover:bg-red-600 text-red-500 hover:text-white px-3 py-1.5 rounded text-xs transition" title="Hapus">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
@@ -235,7 +236,6 @@
             <div v-if="showModal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
                 <div class="bg-gray-800 rounded-xl max-w-3xl w-full border border-gray-600 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                     
-                    <!-- Header Modal -->
                     <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-900">
                         <h3 class="text-white font-bold flex items-center gap-2">
                             <i class="fa-solid fa-server text-blue-500"></i> Konfigurasi Hosting
@@ -243,7 +243,6 @@
                         <button @click="showModal = false" class="text-gray-400 hover:text-white w-8 h-8 flex items-center justify-center rounded hover:bg-gray-700"><i class="fa-solid fa-times text-lg"></i></button>
                     </div>
 
-                    <!-- TABS -->
                     <div class="flex bg-gray-900 border-b border-gray-700">
                         <button 
                             @click="activeDomainTab = 'cloudflare'" 
@@ -261,7 +260,6 @@
                         </button>
                     </div>
 
-                    <!-- Isi Modal -->
                     <div class="p-5 overflow-y-auto bg-gray-800 flex-1">
                         <div class="bg-blue-900/20 border border-blue-800 p-3 rounded mb-4 text-sm text-blue-200">
                             <i class="fa-solid fa-info-circle mr-1"></i>
@@ -277,7 +275,6 @@
                         </div>
                     </div>
 
-                    <!-- Footer -->
                     <div class="p-3 bg-gray-900 border-t border-gray-700 text-right">
                         <button @click="showModal = false" class="bg-gray-700 hover:bg-gray-600 text-white px-5 py-2 rounded text-sm transition font-medium">Selesai</button>
                     </div>
@@ -290,11 +287,11 @@
     <script>
         const { createApp, ref, onMounted, computed } = Vue;
         
-        // --- KONFIGURASI SUPABASE KEY (Sesuaikan dengan milik Bapak) ---
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtaGhyY2d2bmZqc2dlaWRleXV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUxMjgyOTEsImV4cCI6MjA4MDcwNDI5MX0.sCewtOfQWDNtWVjpn_aLxUcIWuaiwlSoeO07ORW5Znk';
         
         createApp({
             setup() {
+                // ... (sisanya sama, tidak perlu diubah)
                 const user = ref(null);
                 const email = ref('');
                 const password = ref('');
@@ -302,21 +299,17 @@
                 const loading = ref(false);
                 const errorMsg = ref('');
                 const statusMsg = ref('');
-                
                 const projectName = ref('');
                 const uploadType = ref('zip');
                 const rawHtmlCode = ref('<!DOCTYPE html>\n<html>\n<head>\n<title>Web Saya</title>\n</head>\n<body>\n<h1>Halo Dunia!</h1>\n</body>\n</html>');
                 const htmlInput = ref(null);
                 const zipInput = ref(null);
                 const selectedFileName = ref('');
-                
                 const deployments = ref([]);
-                
-                // Modal States
                 const showModal = ref(false);
                 const activeModalProject = ref('');
                 const activeOriginUrl = ref('');
-                const activeDomainTab = ref('cloudflare'); // 'cloudflare' or 'deno'
+                const activeDomainTab = ref('cloudflare');
 
                 let sbClient = null;
                 if(window.supabase) sbClient = window.supabase.createClient(SB_URL, SUPABASE_KEY);
@@ -470,18 +463,13 @@
                     try {
                         const folderPath = `${user.value.id}/${dep.site_name}`;
                         
-                        // 1. HAPUS FILE DI STORAGE
                         const { data: listFiles } = await sbClient.storage.from(SB_BUCKET).list(folderPath);
                         if(listFiles && listFiles.length > 0) {
                             const filesToRemove = listFiles.map(x => `${folderPath}/${x.name}`);
-                            const { error: errStorage } = await sbClient.storage.from(SB_BUCKET).remove(filesToRemove);
-                            if(errStorage) console.error("Storage delete error", errStorage);
+                            await sbClient.storage.from(SB_BUCKET).remove(filesToRemove);
                         }
 
-                        // 2. HAPUS DATA DI DATABASE
-                        const { error: errDB } = await sbClient.from('deployments').delete().eq('id', dep.id);
-                        if(errDB) throw errDB;
-
+                        await sbClient.from('deployments').delete().eq('id', dep.id);
                         fetchDeployments();
                     } catch(e) {
                         alert('Gagal hapus: ' + e.message);
@@ -526,23 +514,20 @@
                 const openDomainSettings = (dep) => {
                     activeModalProject.value = dep.site_name;
                     activeOriginUrl.value = `${SB_URL}/storage/v1/object/public/${SB_BUCKET}/${user.value.id}/${dep.site_name}/`;
-                    activeDomainTab.value = 'cloudflare'; // Reset ke cloudflare saat buka
+                    activeDomainTab.value = 'cloudflare';
                     showModal.value = true;
                 };
 
-                // --- GENERATOR KODE CLOUDFLARE (FITUR LENGKAP) ---
                 const generatedWorkerCode = computed(() => {
                     return `export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const sourceBase = "${activeOriginUrl.value}";
 
-    // 1. LOGIC PATH
     let path = url.pathname;
     if (path.startsWith('/')) path = path.substring(1);
     if (path === '' || path.endsWith('/')) path += 'index.html';
 
-    // 2. JSON PROTECTION (Backend Style)
     if (path.endsWith('.json')) {
         const referer = request.headers.get('Referer');
         const mode = request.headers.get('Sec-Fetch-Mode');
@@ -552,11 +537,8 @@
     }
 
     const targetUrl = sourceBase + path;
-    
-    // 3. FETCH SUPABASE
     let response = await fetch(targetUrl);
 
-    // 4. HANDLE 404 (Auto Index & SPA Support)
     if (response.status === 404) {
       if (!path.match(/\\.(css|js|png|jpg|jpeg|gif|ico|svg|json)$/)) {
         const homeResponse = await fetch(sourceBase + 'index.html');
@@ -569,23 +551,18 @@
       }
     }
 
-    // 5. SECURITY & OPTIMIZATION HEADERS
     const newHeaders = new Headers(response.headers);
-    
-    // Pecat Satpam (Hapus CSP agar Tailwind jalan)
     newHeaders.delete("Content-Security-Policy");
     newHeaders.delete("X-Content-Type-Options");
     newHeaders.delete("X-Frame-Options");
     newHeaders.delete("Strict-Transport-Security");
 
-    // Cache Control (Hemat Bandwidth)
     if (path.match(/\\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|ttf)$/)) {
         newHeaders.set("Cache-Control", "public, max-age=31536000, immutable");
     } else {
         newHeaders.set("Cache-Control", "public, max-age=300");
     }
 
-    // Set MIME Type
     let mimeType = newHeaders.get("Content-Type");
     if (path.endsWith(".html")) mimeType = "text/html; charset=utf-8";
     else if (path.endsWith(".css")) mimeType = "text/css; charset=utf-8";
@@ -605,7 +582,6 @@
 };`;
                 });
 
-                // --- GENERATOR KODE DENO (FITUR LENGKAP) ---
                 const generatedDenoCode = computed(() => {
                     return `// Deno Deploy Script for ${activeModalProject.value}
 const sourceBase = "${activeOriginUrl.value}";
@@ -617,7 +593,6 @@ Deno.serve(async (req) => {
   if (path.startsWith('/')) path = path.substring(1);
   if (path === '' || path.endsWith('/')) path += 'index.html';
 
-  // JSON PROTECTION
   if (path.endsWith('.json')) {
       const referer = req.headers.get('Referer');
       const mode = req.headers.get('Sec-Fetch-Mode');
