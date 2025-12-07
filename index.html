@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script> <!-- Untuk Download -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
     <style>
@@ -18,7 +18,6 @@
         body { background-color: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', sans-serif; }
         .loading-view { height: 100vh; display: flex; justify-content: center; align-items: center; background: #fff; color: #333; }
         
-        /* Scrollbar untuk Textarea Code */
         textarea.code-editor {
             font-family: 'Courier New', Courier, monospace;
             white-space: pre;
@@ -26,14 +25,13 @@
             overflow-x: scroll;
         }
         
-        /* Modal Transition */
         .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
         .fade-enter-from, .fade-leave-to { opacity: 0; }
     </style>
 </head>
 <body>
 
-    <!-- 1. VIEWER MODE (TIDAK BERUBAH) -->
+    <!-- 1. VIEWER MODE -->
     <script>
         const params = new URLSearchParams(window.location.search);
         const viewPath = params.get('view');
@@ -202,7 +200,7 @@
                     </div>
                     <div class="p-6 overflow-y-auto">
                         <p class="text-sm text-gray-300 mb-4">
-                            Salin kode di bawah ini ke Cloudflare Workers Anda untuk menggunakan domain sendiri.
+                            Salin kode di bawah ini ke Cloudflare Workers Anda.
                             Link <code>origin</code> sudah disesuaikan otomatis dengan project <b>{{ activeModalProject }}</b>.
                         </p>
                         <div class="relative">
@@ -225,7 +223,6 @@
         const { createApp, ref, onMounted, computed } = Vue;
         
         // --- KONFIGURASI SUPABASE ---
-        // Ganti dengan Key Publik Anda sendiri jika perlu, ini key anonim yang aman di expose jika RLS diatur benar
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtaGhyY2d2bmZqc2dlaWRleXV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUxMjgyOTEsImV4cCI6MjA4MDcwNDI5MX0.sCewtOfQWDNtWVjpn_aLxUcIWuaiwlSoeO07ORW5Znk';
         
         createApp({
@@ -239,7 +236,7 @@
                 const statusMsg = ref('');
                 
                 const projectName = ref('');
-                const uploadType = ref('zip'); // zip, single, code
+                const uploadType = ref('zip');
                 const rawHtmlCode = ref('<!DOCTYPE html>\n<html>\n<head>\n<title>Web Saya</title>\n</head>\n<body>\n<h1>Halo Dunia!</h1>\n</body>\n</html>');
                 const htmlInput = ref(null);
                 const zipInput = ref(null);
@@ -247,7 +244,6 @@
                 
                 const deployments = ref([]);
                 
-                // Modal Logic
                 const showModal = ref(false);
                 const activeModalProject = ref('');
                 const activeOriginUrl = ref('');
@@ -296,23 +292,20 @@
                     loading.value = true; statusMsg.value = 'Inisialisasi...';
                     
                     const userId = user.value.id;
-                    const basePath = `${userId}/${projectName.value}`; // Folder: user_id/slug/
+                    const basePath = `${userId}/${projectName.value}`;
                     
                     try {
-                        // 1. RAW CODE UPLOAD
                         if(uploadType.value === 'code') {
                             const blob = new Blob([rawHtmlCode.value], { type: 'text/html' });
                             statusMsg.value = 'Mengupload kode...';
                             await uploadToSupabase(basePath, 'index.html', blob, 'text/html');
                         } 
-                        // 2. SINGLE HTML FILE
                         else if(uploadType.value === 'single') {
                             const file = htmlInput.value.files[0];
                             if(!file) throw new Error("Pilih file HTML dulu");
                             statusMsg.value = 'Mengupload file...';
                             await uploadToSupabase(basePath, 'index.html', file, 'text/html');
                         } 
-                        // 3. ZIP FILE
                         else {
                             const file = zipInput.value.files[0];
                             if(!file) throw new Error("Pilih file ZIP dulu");
@@ -327,7 +320,6 @@
                             for(const f of fileNames) {
                                 if(!contents.files[f].dir) {
                                     const contentBlob = await contents.files[f].async('blob');
-                                    // Deteksi tipe file sederhana
                                     let mime = 'application/octet-stream';
                                     if(f.endsWith('.html')) mime = 'text/html';
                                     else if(f.endsWith('.css')) mime = 'text/css';
@@ -342,12 +334,11 @@
                             }
                         }
 
-                        // Save Metadata to DB
                         const { error } = await sbClient.from('deployments').upsert({
                             user_id: userId, 
                             site_name: projectName.value, 
                             public_url: `${basePath}/index.html` 
-                        }, { onConflict: 'site_name, user_id' }); // Upsert agar bisa update
+                        }, { onConflict: 'site_name, user_id' });
                         
                         if(error) throw error;
 
@@ -355,7 +346,6 @@
                         fetchDeployments();
                         projectName.value = '';
                         selectedFileName.value = '';
-                        // Reset inputs
                         if(htmlInput.value) htmlInput.value.value = '';
                         if(zipInput.value) zipInput.value.value = '';
 
@@ -380,12 +370,10 @@
                     deployments.value = data || [];
                 };
 
-                // --- FEATURE: DELETE ---
                 const deleteSite = async (dep) => {
                     if(!confirm(`Hapus website "${dep.site_name}"? Data tidak bisa dikembalikan.`)) return;
                     
                     try {
-                        // 1. Hapus file di Storage (Harus list dulu karena Supabase tidak ada delete folder recursive API public)
                         const folderPath = `${user.value.id}/${dep.site_name}`;
                         const { data: listFiles } = await sbClient.storage.from(SB_BUCKET).list(folderPath);
                         
@@ -394,48 +382,38 @@
                             await sbClient.storage.from(SB_BUCKET).remove(filesToRemove);
                         }
 
-                        // 2. Hapus Record DB
                         await sbClient.from('deployments').delete().eq('id', dep.id);
-                        
                         fetchDeployments();
                     } catch(e) {
                         alert('Gagal hapus: ' + e.message);
                     }
                 };
 
-                // --- FEATURE: BACKUP (DOWNLOAD ZIP) ---
                 const backupSite = async (dep) => {
                     try {
                         const folderPath = `${user.value.id}/${dep.site_name}`;
-                        // List file di folder
                         const { data: listFiles, error } = await sbClient.storage.from(SB_BUCKET).list(folderPath);
                         if(error) throw error;
                         if(!listFiles || listFiles.length === 0) { alert('Folder kosong'); return; }
 
                         const zip = new JSZip();
                         
-                        // Loop download setiap file dan masukkan ke ZIP
-                        let count = 0;
                         for(const file of listFiles) {
                             const fileUrl = `${SB_URL}/storage/v1/object/public/${SB_BUCKET}/${folderPath}/${file.name}`;
                             const response = await fetch(fileUrl);
                             const blob = await response.blob();
                             zip.file(file.name, blob);
-                            count++;
                         }
 
                         const content = await zip.generateAsync({ type: "blob" });
                         saveAs(content, `${dep.site_name}-backup.zip`);
-
                     } catch(e) {
                         alert('Gagal backup: ' + e.message);
                     }
                 };
 
-                // --- LINK HELPER ---
                 const getViewerLink = (siteName) => {
                     const currentHost = window.location.origin + window.location.pathname;
-                    // Hapus query params dari current url jika ada
                     const cleanHost = currentHost.split('?')[0];
                     const path = `${user.value.id}/${siteName}/index.html`;
                     return `${cleanHost}?view=${path}`;
@@ -446,62 +424,68 @@
                     alert('Link disalin ke clipboard!');
                 };
 
-                // --- FEATURE: WORKER SETTINGS ---
                 const openDomainSettings = (dep) => {
                     activeModalProject.value = dep.site_name;
-                    // URL Folder Storage Asli
                     activeOriginUrl.value = `${SB_URL}/storage/v1/object/public/${SB_BUCKET}/${user.value.id}/${dep.site_name}/`;
                     showModal.value = true;
                 };
 
-                // Kode Worker yang Digenerate Secara Dinamis
+                // --- INI BAGIAN YANG DIPERBAIKI (WORKER BARU) ---
                 const generatedWorkerCode = computed(() => {
                     return `export default {
   async fetch(request) {
     const url = new URL(request.url);
     
-    // --- KONFIGURASI OTOMATIS ---
-    // Link Source Asli dari MiniHost Storage
+    // --- 1. SETTING SUMBER FILE ---
+    // Link ini WAJIB mengarah ke Supabase (Storage Asli)
     const origin = "${activeOriginUrl.value}";
     
-    // Logika Routing
+    // --- 2. LOGIKA ROUTING (PENTING) ---
     let path = url.pathname;
+    
+    // ATURAN A: Jika buka domain utama, arahkan ke index.html
     if (path === '/' || path === '') {
       path = 'index.html';
-    } else if (path.startsWith('/')) {
+    } 
+    // ATURAN B: Jika buka folder (akhiran /), cari index.html di dalamnya
+    else if (path.endsWith('/')) {
+      path += 'index.html';
+    }
+    
+    // Bersihkan slash di depan agar link Supabase nyambung
+    if (path.startsWith('/')) {
       path = path.substring(1);
     }
     
+    // Gabungkan Link
     const targetURL = origin + path + url.search;
     
-    // --- CACHING & FETCHING ---
+    // --- 3. PROSES AMBIL FILE ---
     const cache = caches.default;
     let response = await cache.match(targetURL);
     
     if (!response) {
-      console.log("Fetching from origin:", targetURL);
+      // Ambil file apapun yang diminta (CSS, JS, PNG, HTML)
       let fetched = await fetch(targetURL, {
         headers: { "User-Agent": "MiniHost-Worker" }
       });
-      
-      // Jika 404 pada file, coba index.html (SPA Fallback) - Opsional
+
+      // OPTIONAL: Fallback untuk SPA (React/Vue) jika 404
       if(fetched.status === 404 && !path.includes('.')) {
           fetched = await fetch(origin + 'index.html');
       }
 
+      // Buat respon baru
       response = new Response(fetched.body, fetched);
       response.headers.set("Access-Control-Allow-Origin", "*");
+      response.headers.set("Cache-Control", "public, max-age=3600"); // Cache 1 Jam
       
-      // Cache di Cloudflare Edge selama 1 jam
-      response.headers.set("Cache-Control", "public, max-age=3600");
-      
-      try {
-        if(fetched.status === 200) cache.put(targetURL, response.clone());
-      } catch (e) {}
+      // Simpan di cache jika sukses
+      if(fetched.status === 200) {
+        try { cache.put(targetURL, response.clone()); } catch (e) {}
+      }
     }
     
-    // Cache di Browser User selama 1 hari
-    response.headers.set("Cache-Control", "public, max-age=86400");
     return response;
   }
 }`;
@@ -517,7 +501,6 @@
                     projectName, uploadType, rawHtmlCode, htmlInput, zipInput, selectedFileName, handleFile, deploy,
                     deployments, getViewerLink, copyLink, deleteSite, backupSite,
                     sanitizeProjectName: () => projectName.value = projectName.value.replace(/[^a-z0-9-]/g, '').toLowerCase(),
-                    // Modal
                     showModal, activeModalProject, openDomainSettings, generatedWorkerCode, copyWorkerCode
                 };
             }
