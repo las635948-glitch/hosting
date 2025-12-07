@@ -430,63 +430,55 @@
                     showModal.value = true;
                 };
 
-                // --- INI BAGIAN YANG DIPERBAIKI (WORKER BARU) ---
+                // --- GENERATOR KODE WORKER (DIPERBAIKI) ---
+                // Menggunakan logic new Response dan routing yang lebih stabil untuk Cloudflare
                 const generatedWorkerCode = computed(() => {
                     return `export default {
   async fetch(request) {
     const url = new URL(request.url);
     
-    // --- 1. SETTING SUMBER FILE ---
-    // Link ini WAJIB mengarah ke Supabase (Storage Asli)
-    const origin = "${activeOriginUrl.value}";
-    
-    // --- 2. LOGIKA ROUTING (PENTING) ---
+    // 1. Definisikan Base URL dari Supabase (Folder Project)
+    const sourceBase = "${activeOriginUrl.value}";
+
+    // 2. Ambil path yang diminta user
     let path = url.pathname;
-    
-    // ATURAN A: Jika buka domain utama, arahkan ke index.html
-    if (path === '/' || path === '') {
-      path = 'index.html';
-    } 
-    // ATURAN B: Jika buka folder (akhiran /), cari index.html di dalamnya
-    else if (path.endsWith('/')) {
-      path += 'index.html';
-    }
-    
-    // Bersihkan slash di depan agar link Supabase nyambung
+
+    // Hapus slash di awal path agar bisa digabung dengan sourceBase
     if (path.startsWith('/')) {
       path = path.substring(1);
     }
-    
-    // Gabungkan Link
-    const targetURL = origin + path + url.search;
-    
-    // --- 3. PROSES AMBIL FILE ---
-    const cache = caches.default;
-    let response = await cache.match(targetURL);
-    
-    if (!response) {
-      // Ambil file apapun yang diminta (CSS, JS, PNG, HTML)
-      let fetched = await fetch(targetURL, {
-        headers: { "User-Agent": "MiniHost-Worker" }
-      });
 
-      // OPTIONAL: Fallback untuk SPA (React/Vue) jika 404
-      if(fetched.status === 404 && !path.includes('.')) {
-          fetched = await fetch(origin + 'index.html');
-      }
+    // 3. Logika Indexing (Mirip Web Server Asli)
+    if (path === '' || path.endsWith('/')) {
+      path += 'index.html';
+    }
 
-      // Buat respon baru
-      response = new Response(fetched.body, fetched);
-      response.headers.set("Access-Control-Allow-Origin", "*");
-      response.headers.set("Cache-Control", "public, max-age=3600"); // Cache 1 Jam
-      
-      // Simpan di cache jika sukses
-      if(fetched.status === 200) {
-        try { cache.put(targetURL, response.clone()); } catch (e) {}
+    // Gabungkan menjadi URL lengkap Supabase
+    const targetUrl = sourceBase + path;
+
+    // 4. Lakukan Fetch ke Supabase
+    let response = await fetch(targetUrl);
+
+    // 5. Fitur SPA Fallback
+    // Jika file tidak ditemukan (404) dan bukan file aset (tidak ada titik),
+    // coba ambil index.html
+    if (response.status === 404 && !path.includes('.')) {
+      const homeResponse = await fetch(sourceBase + 'index.html');
+      if (homeResponse.status === 200) {
+        response = homeResponse;
       }
     }
-    
-    return response;
+
+    // 6. Buat Response Baru (PENTING untuk CORS & Header)
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set("Access-Control-Allow-Origin", "*");
+    newHeaders.set("Cache-Control", "public, max-age=3600");
+
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders
+    });
   }
 }`;
                 });
