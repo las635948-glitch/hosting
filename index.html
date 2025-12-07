@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MiniHost Advanced - Multi Platform</title>
+    <title>MiniHost Advanced - Final Pro</title>
     
-    <!-- CSS & Helper -->
+    <!-- Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -18,14 +18,16 @@
         body { background-color: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', sans-serif; }
         .loading-view { height: 100vh; display: flex; justify-content: center; align-items: center; background: #fff; color: #333; }
         
+        /* Code Editor Styling */
         textarea.code-editor {
-            font-family: 'Courier New', Courier, monospace;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
             white-space: pre;
             overflow-wrap: normal;
             overflow-x: scroll;
+            font-size: 12px;
+            line-height: 1.5;
         }
         
-        /* Scrollbar styling for code block */
         textarea.code-editor::-webkit-scrollbar { height: 8px; width: 8px; }
         textarea.code-editor::-webkit-scrollbar-track { background: #1e293b; }
         textarea.code-editor::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
@@ -36,26 +38,58 @@
 </head>
 <body>
 
-    <!-- 1. VIEWER MODE -->
+    <!-- 1. VIEWER MODE (PREVIEW) -->
     <script>
         const params = new URLSearchParams(window.location.search);
         const viewPath = params.get('view');
-        // --- KONFIGURASI PROJEK ---
+        
+        // --- KONFIGURASI SUPABASE ---
         const SB_URL = 'https://wmhhrcgvnfjsgeideyut.supabase.co';
         const SB_BUCKET = 'hosting';
 
         if (viewPath) {
             document.body.innerHTML = '<div class="loading-view"><h3>Sedang Memuat Website...</h3></div>';
+            
+            // 1. Susun URL File Asli
             const fileUrl = `${SB_URL}/storage/v1/object/public/${SB_BUCKET}/${viewPath}`;
+            
+            // 2. Susun Base URL (Folder tempat file berada)
+            // Ini PENTING agar file gambar/css relatif (./style.css) bisa terbaca
+            const lastSlash = viewPath.lastIndexOf('/');
+            const folderPath = lastSlash !== -1 ? viewPath.substring(0, lastSlash + 1) : '';
+            const baseUrl = `${SB_URL}/storage/v1/object/public/${SB_BUCKET}/${folderPath}`;
+
             fetch(fileUrl).then(r => {
-                if (!r.ok) throw new Error("File tidak ditemukan");
+                if (!r.ok) throw new Error("File tidak ditemukan / Error 404");
                 return r.text();
             }).then(html => {
-                document.open(); document.write(html); document.close();
+                // 3. INJECT <base> TAG
+                // Memaksa browser mencari aset relatif di folder Supabase, bukan di GitHub Pages
+                const baseTag = `<base href="${baseUrl}">`;
+                let finalHtml = html;
+                
+                // Masukkan base tag setelah <head>
+                if (html.includes('<head>')) {
+                    finalHtml = html.replace('<head>', `<head>${baseTag}`);
+                } else if (html.includes('<html>')) {
+                    finalHtml = html.replace('<html>', `<html><head>${baseTag}</head>`);
+                } else {
+                    finalHtml = `${baseTag}${html}`;
+                }
+
+                document.open(); 
+                document.write(finalHtml); 
+                document.close();
             }).catch(err => {
-                document.body.innerHTML = `<div style="text-align:center;padding:50px;color:red"><h2>Error 404</h2><p>${err.message}</p></div>`;
+                document.body.innerHTML = `
+                    <div style="height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;color:#ef4444;font-family:sans-serif;">
+                        <h1 style="font-size:4rem;margin-bottom:0;"><i class="fa-solid fa-triangle-exclamation"></i></h1>
+                        <h2 style="margin-top:10px;">Gagal Memuat Preview</h2>
+                        <p>${err.message}</p>
+                        <a href="?" style="margin-top:20px;color:#3b82f6;text-decoration:none;">&larr; Kembali ke Dashboard</a>
+                    </div>`;
             });
-            throw new Error("Viewer Mode"); 
+            throw new Error("Viewer Mode Active"); 
         }
     </script>
 
@@ -66,28 +100,28 @@
         <div class="flex justify-between items-center mb-6 mt-4 border-b border-gray-700 pb-4">
             <h1 class="text-2xl font-bold text-white flex items-center gap-2">
                 <i class="fa-solid fa-rocket text-blue-500"></i> MiniHost 
-                <span class="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded">Pro</span>
+                <span class="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded border border-gray-600">Pro</span>
             </h1>
-            <button v-if="user" @click="logout" class="text-red-400 text-sm border border-red-900 bg-red-900/20 px-4 py-2 rounded hover:bg-red-900/40 transition">
+            <button v-if="user" @click="logout" class="text-red-400 text-sm border border-red-900 bg-red-900/20 px-4 py-2 rounded hover:bg-red-900/40 transition flex items-center gap-2">
                 <i class="fa-solid fa-power-off"></i> Logout
             </button>
         </div>
 
         <!-- AUTH VIEW -->
         <div v-if="!user" class="max-w-md mx-auto mt-10">
-            <div class="bg-gray-800 p-8 rounded-xl border border-gray-700 shadow-lg">
+            <div class="bg-gray-800 p-8 rounded-xl border border-gray-700 shadow-2xl">
                 <h2 class="text-2xl font-bold mb-6 text-white text-center">{{ isLoginMode ? 'Login Akun' : 'Daftar Baru' }}</h2>
                 <form @submit.prevent="handleAuth" class="space-y-4">
                     <div>
                         <label class="block text-xs text-gray-400 mb-1">Email</label>
-                        <input v-model="email" type="email" required class="w-full bg-gray-900 border border-gray-600 focus:border-blue-500 text-white p-3 rounded outline-none transition">
+                        <input v-model="email" type="email" required class="w-full bg-gray-900 border border-gray-600 focus:border-blue-500 text-white p-3 rounded outline-none transition placeholder-gray-600" placeholder="nama@email.com">
                     </div>
                     <div>
                         <label class="block text-xs text-gray-400 mb-1">Password</label>
-                        <input v-model="password" type="password" required class="w-full bg-gray-900 border border-gray-600 focus:border-blue-500 text-white p-3 rounded outline-none transition">
+                        <input v-model="password" type="password" required class="w-full bg-gray-900 border border-gray-600 focus:border-blue-500 text-white p-3 rounded outline-none transition placeholder-gray-600" placeholder="******">
                     </div>
-                    <button type="submit" :disabled="loading" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded transition shadow-lg shadow-blue-500/30">
-                        <i v-if="loading" class="fa-solid fa-circle-notch fa-spin mr-2"></i>
+                    <button type="submit" :disabled="loading" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded transition shadow-lg shadow-blue-500/30 flex justify-center items-center gap-2">
+                        <i v-if="loading" class="fa-solid fa-circle-notch fa-spin"></i>
                         {{ loading ? 'Memproses...' : (isLoginMode ? 'Masuk' : 'Daftar') }}
                     </button>
                 </form>
@@ -105,7 +139,7 @@
             <!-- UPLOAD CARD -->
             <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 mb-8 shadow-xl">
                 <h3 class="font-bold text-lg mb-4 text-white flex items-center gap-2">
-                    <i class="fa-solid fa-cloud-arrow-up"></i> Deploy Website Baru
+                    <i class="fa-solid fa-cloud-arrow-up text-blue-400"></i> Deploy Website Baru
                 </h3>
                 
                 <div class="mb-5">
@@ -118,24 +152,24 @@
 
                 <!-- TABS UPLOAD -->
                 <div class="grid grid-cols-3 gap-1 mb-4 bg-gray-900 p-1 rounded-lg">
-                    <button @click="uploadType='zip'" :class="uploadType=='zip'?'bg-blue-600 text-white shadow':'text-gray-400 hover:text-white'" class="py-2 rounded text-sm font-medium transition">ZIP File</button>
-                    <button @click="uploadType='single'" :class="uploadType=='single'?'bg-blue-600 text-white shadow':'text-gray-400 hover:text-white'" class="py-2 rounded text-sm font-medium transition">HTML File</button>
-                    <button @click="uploadType='code'" :class="uploadType=='code'?'bg-blue-600 text-white shadow':'text-gray-400 hover:text-white'" class="py-2 rounded text-sm font-medium transition">Raw Code</button>
+                    <button @click="uploadType='zip'" :class="uploadType=='zip'?'bg-blue-600 text-white shadow':'text-gray-400 hover:text-white'" class="py-2 rounded text-sm font-medium transition"><i class="fa-solid fa-file-zipper mr-1"></i> ZIP</button>
+                    <button @click="uploadType='single'" :class="uploadType=='single'?'bg-blue-600 text-white shadow':'text-gray-400 hover:text-white'" class="py-2 rounded text-sm font-medium transition"><i class="fa-brands fa-html5 mr-1"></i> HTML</button>
+                    <button @click="uploadType='code'" :class="uploadType=='code'?'bg-blue-600 text-white shadow':'text-gray-400 hover:text-white'" class="py-2 rounded text-sm font-medium transition"><i class="fa-solid fa-code mr-1"></i> Code</button>
                 </div>
 
                 <!-- INPUT AREA -->
-                <div v-if="uploadType === 'single'" class="mb-4 border-2 border-dashed border-gray-600 hover:border-blue-500 bg-gray-700/30 p-8 text-center rounded-lg transition cursor-pointer" @click="$refs.htmlInput.click()">
-                    <i class="fa-brands fa-html5 text-4xl text-orange-500 mb-2"></i>
-                    <p class="text-sm text-gray-300">Klik untuk pilih file index.html</p>
+                <div v-if="uploadType === 'single'" class="mb-4 border-2 border-dashed border-gray-600 hover:border-blue-500 bg-gray-700/30 p-8 text-center rounded-lg transition cursor-pointer group" @click="$refs.htmlInput.click()">
+                    <i class="fa-brands fa-html5 text-4xl text-gray-500 group-hover:text-orange-500 mb-2 transition"></i>
+                    <p class="text-sm text-gray-300">Klik untuk pilih file <code class="bg-gray-800 px-1 rounded">index.html</code></p>
                     <input type="file" ref="htmlInput" accept=".html" @change="handleFile" class="hidden">
-                    <p v-if="selectedFileName" class="text-blue-400 text-xs mt-2">{{ selectedFileName }}</p>
+                    <p v-if="selectedFileName" class="text-blue-400 text-xs mt-2 font-bold">{{ selectedFileName }}</p>
                 </div>
 
-                <div v-if="uploadType === 'zip'" class="mb-4 border-2 border-dashed border-gray-600 hover:border-blue-500 bg-gray-700/30 p-8 text-center rounded-lg transition cursor-pointer" @click="$refs.zipInput.click()">
-                    <i class="fa-solid fa-file-zipper text-4xl text-yellow-500 mb-2"></i>
-                    <p class="text-sm text-gray-300">Klik untuk pilih file .zip</p>
+                <div v-if="uploadType === 'zip'" class="mb-4 border-2 border-dashed border-gray-600 hover:border-blue-500 bg-gray-700/30 p-8 text-center rounded-lg transition cursor-pointer group" @click="$refs.zipInput.click()">
+                    <i class="fa-solid fa-file-zipper text-4xl text-gray-500 group-hover:text-yellow-500 mb-2 transition"></i>
+                    <p class="text-sm text-gray-300">Klik untuk pilih file <code class="bg-gray-800 px-1 rounded">.zip</code></p>
                     <input type="file" ref="zipInput" accept=".zip" @change="handleFile" class="hidden">
-                    <p v-if="selectedFileName" class="text-blue-400 text-xs mt-2">{{ selectedFileName }}</p>
+                    <p v-if="selectedFileName" class="text-blue-400 text-xs mt-2 font-bold">{{ selectedFileName }}</p>
                 </div>
 
                 <div v-if="uploadType === 'code'" class="mb-4">
@@ -146,8 +180,8 @@
                     <textarea v-model="rawHtmlCode" class="code-editor w-full h-48 bg-gray-900 border border-gray-600 text-green-400 p-3 rounded text-sm focus:border-blue-500 outline-none" placeholder="<!DOCTYPE html><html>...</html>"></textarea>
                 </div>
 
-                <button @click="deploy" :disabled="loading || !projectName" class="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white font-bold py-3 rounded shadow-lg shadow-green-500/20 transition transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-                    <i v-if="loading" class="fa-solid fa-spinner fa-spin mr-2"></i>
+                <button @click="deploy" :disabled="loading || !projectName" class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3 rounded shadow-lg shadow-blue-500/20 transition transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
+                    <i v-if="loading" class="fa-solid fa-spinner fa-spin"></i>
                     {{ loading ? 'Sedang Deploy...' : '🚀 DEPLOY SEKARANG' }}
                 </button>
                 <p v-if="statusMsg" class="text-center text-xs mt-3 text-blue-300 animate-pulse">{{ statusMsg }}</p>
@@ -158,6 +192,7 @@
                 <h3 class="font-bold text-gray-400 text-xs mb-3 uppercase tracking-wider">Project Aktif ({{ deployments.length }})</h3>
                 
                 <div v-if="deployments.length === 0" class="text-center text-gray-500 py-10 bg-gray-800/50 rounded border border-dashed border-gray-700">
+                    <i class="fa-solid fa-box-open text-2xl mb-2 text-gray-600"></i><br>
                     Belum ada website yang dideploy
                 </div>
 
@@ -166,90 +201,85 @@
                         <div class="overflow-hidden mr-2">
                             <h4 class="font-bold text-white text-lg truncate flex items-center">
                                 {{ dep.site_name }}
-                                <a :href="getViewerLink(dep.site_name)" target="_blank" class="ml-2 text-gray-500 hover:text-blue-400 text-xs"><i class="fa-solid fa-external-link-alt"></i></a>
                             </h4>
-                            <p class="text-xs text-gray-500 mt-1">
+                            <p class="text-xs text-gray-500 mt-1 flex items-center gap-2">
                                 <i class="fa-regular fa-clock"></i> {{ new Date(dep.created_at).toLocaleString() }}
                             </p>
                         </div>
                         <div class="flex gap-1">
                              <!-- TOMBOL DOMAIN -->
-                             <button @click="openDomainSettings(dep)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1.5 rounded text-xs transition" title="Setting Domain">
-                                <i class="fa-solid fa-globe"></i> Domain
+                             <button @click="openDomainSettings(dep)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1.5 rounded text-xs transition border border-gray-600" title="Custom Domain">
+                                <i class="fa-solid fa-globe text-blue-400"></i> Domain
                             </button>
-                            <!-- TOMBOL BACKUP -->
-                            <button @click="backupSite(dep)" class="bg-yellow-600/20 border border-yellow-600 hover:bg-yellow-600 text-yellow-500 hover:text-white px-3 py-1.5 rounded text-xs transition" title="Download ZIP">
-                                <i class="fa-solid fa-download"></i>
-                            </button>
+                            <!-- TOMBOL VIEW -->
+                            <a :href="getViewerLink(dep.site_name)" target="_blank" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1.5 rounded text-xs transition border border-gray-600" title="Preview">
+                                <i class="fa-solid fa-external-link-alt"></i>
+                            </a>
                             <!-- TOMBOL DELETE -->
-                            <button @click="deleteSite(dep)" class="bg-red-600/20 border border-red-600 hover:bg-red-600 text-red-500 hover:text-white px-3 py-1.5 rounded text-xs transition" title="Hapus">
+                            <button @click="deleteSite(dep)" class="bg-red-900/20 border border-red-900 hover:bg-red-600 text-red-500 hover:text-white px-3 py-1.5 rounded text-xs transition" title="Hapus">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
                         </div>
                     </div>
                     
-                    <div class="bg-black/30 p-2 rounded text-xs font-mono text-gray-400 flex justify-between items-center">
-                        <span class="truncate mr-2">{{ getViewerLink(dep.site_name) }}</span>
+                    <div class="bg-black/30 p-2 rounded text-xs font-mono text-gray-400 flex justify-between items-center border border-gray-700/50">
+                        <span class="truncate mr-2 text-gray-500">{{ getViewerLink(dep.site_name) }}</span>
                         <button @click="copyLink(getViewerLink(dep.site_name))" class="text-blue-400 hover:text-white"><i class="fa-regular fa-copy"></i></button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- MODAL DOMAIN SETTINGS (UPDATED WITH TABS) -->
+        <!-- MODAL DOMAIN SETTINGS -->
         <transition name="fade">
-            <div v-if="showModal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-                <div class="bg-gray-800 rounded-xl max-w-2xl w-full border border-gray-600 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div v-if="showModal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                <div class="bg-gray-800 rounded-xl max-w-3xl w-full border border-gray-600 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                     
                     <!-- Header Modal -->
                     <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-900">
                         <h3 class="text-white font-bold flex items-center gap-2">
-                            <i class="fa-solid fa-server text-orange-400"></i> Kode Deploy
+                            <i class="fa-solid fa-server text-blue-500"></i> Konfigurasi Hosting
                         </h3>
-                        <button @click="showModal = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+                        <button @click="showModal = false" class="text-gray-400 hover:text-white w-8 h-8 flex items-center justify-center rounded hover:bg-gray-700"><i class="fa-solid fa-times text-lg"></i></button>
                     </div>
 
-                    <!-- TABS Cloudflare / Deno -->
+                    <!-- TABS -->
                     <div class="flex bg-gray-900 border-b border-gray-700">
                         <button 
                             @click="activeDomainTab = 'cloudflare'" 
-                            class="flex-1 py-3 text-sm font-bold border-b-2 transition"
+                            class="flex-1 py-3 text-sm font-bold border-b-2 transition flex items-center justify-center gap-2"
                             :class="activeDomainTab === 'cloudflare' ? 'border-orange-500 text-orange-400 bg-gray-800' : 'border-transparent text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'"
                         >
-                            <i class="fa-brands fa-cloudflare mr-1"></i> Cloudflare Workers
+                            <i class="fa-brands fa-cloudflare text-lg"></i> Cloudflare Workers
                         </button>
                         <button 
                             @click="activeDomainTab = 'deno'" 
-                            class="flex-1 py-3 text-sm font-bold border-b-2 transition"
+                            class="flex-1 py-3 text-sm font-bold border-b-2 transition flex items-center justify-center gap-2"
                             :class="activeDomainTab === 'deno' ? 'border-white text-white bg-gray-800' : 'border-transparent text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'"
                         >
-                            <i class="fa-solid fa-code mr-1"></i> Deno Deploy
+                            <i class="fa-solid fa-code text-lg"></i> Deno Deploy
                         </button>
                     </div>
 
                     <!-- Isi Modal -->
-                    <div class="p-4 overflow-y-auto bg-gray-800 flex-1">
-                        <p class="text-sm text-gray-300 mb-4">
-                            Salin kode di bawah ini ke 
-                            <b v-if="activeDomainTab === 'cloudflare'" class="text-orange-400">Cloudflare Worker</b>
-                            <b v-else class="text-white">Deno Deploy (Playground)</b>
-                            Anda. Link origin project <b>{{ activeModalProject }}</b> sudah diset otomatis.
-                        </p>
+                    <div class="p-5 overflow-y-auto bg-gray-800 flex-1">
+                        <div class="bg-blue-900/20 border border-blue-800 p-3 rounded mb-4 text-sm text-blue-200">
+                            <i class="fa-solid fa-info-circle mr-1"></i>
+                            Gunakan kode ini untuk menghubungkan <b>Custom Domain</b> Anda, mengaktifkan <b>HTTPS</b>, dan memperbaiki <b>Routing/CSS</b> otomatis.
+                        </div>
 
                         <div class="relative group">
-                            <!-- Textarea Dinamis -->
-                            <textarea readonly class="w-full h-72 bg-black text-green-400 font-mono text-xs p-4 rounded border border-gray-700 outline-none resize-none code-editor" spellcheck="false">{{ activeDomainTab === 'cloudflare' ? generatedWorkerCode : generatedDenoCode }}</textarea>
+                            <textarea readonly class="w-full h-80 bg-[#0d1117] text-green-400 font-mono text-xs p-4 rounded border border-gray-700 outline-none resize-none code-editor" spellcheck="false">{{ activeDomainTab === 'cloudflare' ? generatedWorkerCode : generatedDenoCode }}</textarea>
                             
-                            <!-- Copy Button -->
-                            <button @click="copyWorkerCode" class="absolute top-3 right-3 bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded shadow border border-blue-400 transition transform active:scale-95">
-                                <i class="fa-regular fa-copy"></i> Copy Kode
+                            <button @click="copyWorkerCode" class="absolute top-3 right-3 bg-gray-700 hover:bg-white hover:text-black text-gray-200 text-xs px-3 py-1.5 rounded shadow border border-gray-600 transition flex items-center gap-2">
+                                <i class="fa-regular fa-copy"></i> Copy Code
                             </button>
                         </div>
                     </div>
 
                     <!-- Footer -->
                     <div class="p-3 bg-gray-900 border-t border-gray-700 text-right">
-                        <button @click="showModal = false" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm transition">Tutup</button>
+                        <button @click="showModal = false" class="bg-gray-700 hover:bg-gray-600 text-white px-5 py-2 rounded text-sm transition font-medium">Selesai</button>
                     </div>
                 </div>
             </div>
@@ -260,7 +290,7 @@
     <script>
         const { createApp, ref, onMounted, computed } = Vue;
         
-        // --- KONFIGURASI SUPABASE KEY ---
+        // --- KONFIGURASI SUPABASE KEY (Sesuaikan dengan milik Bapak) ---
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtaGhyY2d2bmZqc2dlaWRleXV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUxMjgyOTEsImV4cCI6MjA4MDcwNDI5MX0.sCewtOfQWDNtWVjpn_aLxUcIWuaiwlSoeO07ORW5Znk';
         
         createApp({
@@ -439,14 +469,19 @@
                     
                     try {
                         const folderPath = `${user.value.id}/${dep.site_name}`;
-                        const { data: listFiles } = await sbClient.storage.from(SB_BUCKET).list(folderPath);
                         
+                        // 1. HAPUS FILE DI STORAGE
+                        const { data: listFiles } = await sbClient.storage.from(SB_BUCKET).list(folderPath);
                         if(listFiles && listFiles.length > 0) {
                             const filesToRemove = listFiles.map(x => `${folderPath}/${x.name}`);
-                            await sbClient.storage.from(SB_BUCKET).remove(filesToRemove);
+                            const { error: errStorage } = await sbClient.storage.from(SB_BUCKET).remove(filesToRemove);
+                            if(errStorage) console.error("Storage delete error", errStorage);
                         }
 
-                        await sbClient.from('deployments').delete().eq('id', dep.id);
+                        // 2. HAPUS DATA DI DATABASE
+                        const { error: errDB } = await sbClient.from('deployments').delete().eq('id', dep.id);
+                        if(errDB) throw errDB;
+
                         fetchDeployments();
                     } catch(e) {
                         alert('Gagal hapus: ' + e.message);
@@ -495,7 +530,7 @@
                     showModal.value = true;
                 };
 
-                // --- GENERATOR KODE CLOUDFLARE ---
+                // --- GENERATOR KODE CLOUDFLARE (FITUR LENGKAP) ---
                 const generatedWorkerCode = computed(() => {
                     return `export default {
   async fetch(request, env, ctx) {
@@ -507,12 +542,21 @@
     if (path.startsWith('/')) path = path.substring(1);
     if (path === '' || path.endsWith('/')) path += 'index.html';
 
+    // 2. JSON PROTECTION (Backend Style)
+    if (path.endsWith('.json')) {
+        const referer = request.headers.get('Referer');
+        const mode = request.headers.get('Sec-Fetch-Mode');
+        if (mode === 'navigate' || !referer) {
+            return new Response("Access Denied: Data is protected.", { status: 403 });
+        }
+    }
+
     const targetUrl = sourceBase + path;
     
-    // 2. FETCH SUPABASE
+    // 3. FETCH SUPABASE
     let response = await fetch(targetUrl);
 
-    // 3. HANDLE 404
+    // 4. HANDLE 404 (Auto Index & SPA Support)
     if (response.status === 404) {
       if (!path.match(/\\.(css|js|png|jpg|jpeg|gif|ico|svg|json)$/)) {
         const homeResponse = await fetch(sourceBase + 'index.html');
@@ -525,14 +569,23 @@
       }
     }
 
-    // 4. BERSIHKAN SECURITY HEADER
+    // 5. SECURITY & OPTIMIZATION HEADERS
     const newHeaders = new Headers(response.headers);
+    
+    // Pecat Satpam (Hapus CSP agar Tailwind jalan)
     newHeaders.delete("Content-Security-Policy");
     newHeaders.delete("X-Content-Type-Options");
     newHeaders.delete("X-Frame-Options");
     newHeaders.delete("Strict-Transport-Security");
 
-    // 5. SET MIME TYPE
+    // Cache Control (Hemat Bandwidth)
+    if (path.match(/\\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|ttf)$/)) {
+        newHeaders.set("Cache-Control", "public, max-age=31536000, immutable");
+    } else {
+        newHeaders.set("Cache-Control", "public, max-age=300");
+    }
+
+    // Set MIME Type
     let mimeType = newHeaders.get("Content-Type");
     if (path.endsWith(".html")) mimeType = "text/html; charset=utf-8";
     else if (path.endsWith(".css")) mimeType = "text/css; charset=utf-8";
@@ -552,7 +605,7 @@
 };`;
                 });
 
-                // --- GENERATOR KODE DENO ---
+                // --- GENERATOR KODE DENO (FITUR LENGKAP) ---
                 const generatedDenoCode = computed(() => {
                     return `// Deno Deploy Script for ${activeModalProject.value}
 const sourceBase = "${activeOriginUrl.value}";
@@ -560,17 +613,22 @@ const sourceBase = "${activeOriginUrl.value}";
 Deno.serve(async (req) => {
   const url = new URL(req.url);
 
-  // 1. LOGIC PATH
   let path = url.pathname;
   if (path.startsWith('/')) path = path.substring(1);
   if (path === '' || path.endsWith('/')) path += 'index.html';
 
+  // JSON PROTECTION
+  if (path.endsWith('.json')) {
+      const referer = req.headers.get('Referer');
+      const mode = req.headers.get('Sec-Fetch-Mode');
+      if (mode === 'navigate' || !referer) {
+          return new Response("Access Denied: Data is protected.", { status: 403 });
+      }
+  }
+
   const targetUrl = sourceBase + path;
-  
-  // 2. FETCH SUPABASE
   let response = await fetch(targetUrl);
 
-  // 3. HANDLE 404
   if (response.status === 404) {
     if (!path.match(/\\.(css|js|png|jpg|jpeg|gif|ico|svg|json)$/)) {
       const homeResponse = await fetch(sourceBase + 'index.html');
@@ -583,14 +641,18 @@ Deno.serve(async (req) => {
     }
   }
 
-  // 4. BERSIHKAN SECURITY HEADER
   const newHeaders = new Headers(response.headers);
   newHeaders.delete("Content-Security-Policy");
   newHeaders.delete("X-Content-Type-Options");
   newHeaders.delete("X-Frame-Options");
   newHeaders.delete("Strict-Transport-Security");
 
-  // 5. SET MIME TYPE
+  if (path.match(/\\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|ttf)$/)) {
+      newHeaders.set("Cache-Control", "public, max-age=31536000, immutable");
+  } else {
+      newHeaders.set("Cache-Control", "public, max-age=300");
+  }
+
   let mimeType = newHeaders.get("Content-Type");
   if (path.endsWith(".html")) mimeType = "text/html; charset=utf-8";
   else if (path.endsWith(".css")) mimeType = "text/css; charset=utf-8";
