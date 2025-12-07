@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MiniHost Advanced - Auto Fix CSS</title>
+    <title>MiniHost Advanced - Multi Platform</title>
     
     <!-- CSS & Helper -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -25,6 +25,11 @@
             overflow-x: scroll;
         }
         
+        /* Scrollbar styling for code block */
+        textarea.code-editor::-webkit-scrollbar { height: 8px; width: 8px; }
+        textarea.code-editor::-webkit-scrollbar-track { background: #1e293b; }
+        textarea.code-editor::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        
         .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
         .fade-enter-from, .fade-leave-to { opacity: 0; }
     </style>
@@ -35,6 +40,7 @@
     <script>
         const params = new URLSearchParams(window.location.search);
         const viewPath = params.get('view');
+        // --- KONFIGURASI PROJEK ---
         const SB_URL = 'https://wmhhrcgvnfjsgeideyut.supabase.co';
         const SB_BUCKET = 'hosting';
 
@@ -110,7 +116,7 @@
                     </div>
                 </div>
 
-                <!-- TABS -->
+                <!-- TABS UPLOAD -->
                 <div class="grid grid-cols-3 gap-1 mb-4 bg-gray-900 p-1 rounded-lg">
                     <button @click="uploadType='zip'" :class="uploadType=='zip'?'bg-blue-600 text-white shadow':'text-gray-400 hover:text-white'" class="py-2 rounded text-sm font-medium transition">ZIP File</button>
                     <button @click="uploadType='single'" :class="uploadType=='single'?'bg-blue-600 text-white shadow':'text-gray-400 hover:text-white'" class="py-2 rounded text-sm font-medium transition">HTML File</button>
@@ -190,28 +196,60 @@
             </div>
         </div>
 
-        <!-- MODAL DOMAIN SETTINGS -->
+        <!-- MODAL DOMAIN SETTINGS (UPDATED WITH TABS) -->
         <transition name="fade">
             <div v-if="showModal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
                 <div class="bg-gray-800 rounded-xl max-w-2xl w-full border border-gray-600 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                    
+                    <!-- Header Modal -->
                     <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-900">
-                        <h3 class="text-white font-bold"><i class="fa-brands fa-cloudflare text-orange-400"></i> Cloudflare Worker Code</h3>
+                        <h3 class="text-white font-bold flex items-center gap-2">
+                            <i class="fa-solid fa-server text-orange-400"></i> Kode Deploy
+                        </h3>
                         <button @click="showModal = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
                     </div>
-                    <div class="p-6 overflow-y-auto">
+
+                    <!-- TABS Cloudflare / Deno -->
+                    <div class="flex bg-gray-900 border-b border-gray-700">
+                        <button 
+                            @click="activeDomainTab = 'cloudflare'" 
+                            class="flex-1 py-3 text-sm font-bold border-b-2 transition"
+                            :class="activeDomainTab === 'cloudflare' ? 'border-orange-500 text-orange-400 bg-gray-800' : 'border-transparent text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'"
+                        >
+                            <i class="fa-brands fa-cloudflare mr-1"></i> Cloudflare Workers
+                        </button>
+                        <button 
+                            @click="activeDomainTab = 'deno'" 
+                            class="flex-1 py-3 text-sm font-bold border-b-2 transition"
+                            :class="activeDomainTab === 'deno' ? 'border-white text-white bg-gray-800' : 'border-transparent text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'"
+                        >
+                            <i class="fa-solid fa-code mr-1"></i> Deno Deploy
+                        </button>
+                    </div>
+
+                    <!-- Isi Modal -->
+                    <div class="p-4 overflow-y-auto bg-gray-800 flex-1">
                         <p class="text-sm text-gray-300 mb-4">
-                            Salin kode di bawah ini ke Cloudflare Workers Anda.
-                            Link <code>origin</code> sudah disesuaikan otomatis dengan project <b>{{ activeModalProject }}</b>.
+                            Salin kode di bawah ini ke 
+                            <b v-if="activeDomainTab === 'cloudflare'" class="text-orange-400">Cloudflare Worker</b>
+                            <b v-else class="text-white">Deno Deploy (Playground)</b>
+                            Anda. Link origin project <b>{{ activeModalProject }}</b> sudah diset otomatis.
                         </p>
-                        <div class="relative">
-                            <textarea readonly class="w-full h-64 bg-black text-green-400 font-mono text-xs p-4 rounded border border-gray-700 outline-none resize-none" spellcheck="false">{{ generatedWorkerCode }}</textarea>
-                            <button @click="copyWorkerCode" class="absolute top-2 right-2 bg-blue-600 hover:bg-blue-500 text-white text-xs px-2 py-1 rounded">
-                                <i class="fa-regular fa-copy"></i> Copy
+
+                        <div class="relative group">
+                            <!-- Textarea Dinamis -->
+                            <textarea readonly class="w-full h-72 bg-black text-green-400 font-mono text-xs p-4 rounded border border-gray-700 outline-none resize-none code-editor" spellcheck="false">{{ activeDomainTab === 'cloudflare' ? generatedWorkerCode : generatedDenoCode }}</textarea>
+                            
+                            <!-- Copy Button -->
+                            <button @click="copyWorkerCode" class="absolute top-3 right-3 bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded shadow border border-blue-400 transition transform active:scale-95">
+                                <i class="fa-regular fa-copy"></i> Copy Kode
                             </button>
                         </div>
                     </div>
-                    <div class="p-4 bg-gray-900 border-t border-gray-700 text-right">
-                        <button @click="showModal = false" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm">Tutup</button>
+
+                    <!-- Footer -->
+                    <div class="p-3 bg-gray-900 border-t border-gray-700 text-right">
+                        <button @click="showModal = false" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm transition">Tutup</button>
                     </div>
                 </div>
             </div>
@@ -222,7 +260,7 @@
     <script>
         const { createApp, ref, onMounted, computed } = Vue;
         
-        // --- KONFIGURASI SUPABASE ---
+        // --- KONFIGURASI SUPABASE KEY ---
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtaGhyY2d2bmZqc2dlaWRleXV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUxMjgyOTEsImV4cCI6MjA4MDcwNDI5MX0.sCewtOfQWDNtWVjpn_aLxUcIWuaiwlSoeO07ORW5Znk';
         
         createApp({
@@ -244,9 +282,11 @@
                 
                 const deployments = ref([]);
                 
+                // Modal States
                 const showModal = ref(false);
                 const activeModalProject = ref('');
                 const activeOriginUrl = ref('');
+                const activeDomainTab = ref('cloudflare'); // 'cloudflare' or 'deno'
 
                 let sbClient = null;
                 if(window.supabase) sbClient = window.supabase.createClient(SB_URL, SUPABASE_KEY);
@@ -451,10 +491,11 @@
                 const openDomainSettings = (dep) => {
                     activeModalProject.value = dep.site_name;
                     activeOriginUrl.value = `${SB_URL}/storage/v1/object/public/${SB_BUCKET}/${user.value.id}/${dep.site_name}/`;
+                    activeDomainTab.value = 'cloudflare'; // Reset ke cloudflare saat buka
                     showModal.value = true;
                 };
 
-                // --- GENERATOR WORKER (FINAL FIX WITH CLOSING BRACES) ---
+                // --- GENERATOR KODE CLOUDFLARE ---
                 const generatedWorkerCode = computed(() => {
                     return `export default {
   async fetch(request, env, ctx) {
@@ -484,17 +525,15 @@
       }
     }
 
-    // 4. BERSIHKAN SECURITY HEADER (PENTING!)
-    // Ini menghapus header 'Content-Security-Policy' yg memblokir CDN
+    // 4. BERSIHKAN SECURITY HEADER
     const newHeaders = new Headers(response.headers);
     newHeaders.delete("Content-Security-Policy");
     newHeaders.delete("X-Content-Type-Options");
     newHeaders.delete("X-Frame-Options");
     newHeaders.delete("Strict-Transport-Security");
 
-    // 5. SET MIME TYPE + CHARSET UTF-8
+    // 5. SET MIME TYPE
     let mimeType = newHeaders.get("Content-Type");
-    
     if (path.endsWith(".html")) mimeType = "text/html; charset=utf-8";
     else if (path.endsWith(".css")) mimeType = "text/css; charset=utf-8";
     else if (path.endsWith(".js")) mimeType = "application/javascript; charset=utf-8";
@@ -510,12 +549,70 @@
       headers: newHeaders
     });
   }
-};`; // <--- PENUTUP YANG HILANG SUDAH DITAMBAHKAN DI SINI
+};`;
+                });
+
+                // --- GENERATOR KODE DENO ---
+                const generatedDenoCode = computed(() => {
+                    return `// Deno Deploy Script for ${activeModalProject.value}
+const sourceBase = "${activeOriginUrl.value}";
+
+Deno.serve(async (req) => {
+  const url = new URL(req.url);
+
+  // 1. LOGIC PATH
+  let path = url.pathname;
+  if (path.startsWith('/')) path = path.substring(1);
+  if (path === '' || path.endsWith('/')) path += 'index.html';
+
+  const targetUrl = sourceBase + path;
+  
+  // 2. FETCH SUPABASE
+  let response = await fetch(targetUrl);
+
+  // 3. HANDLE 404
+  if (response.status === 404) {
+    if (!path.match(/\\.(css|js|png|jpg|jpeg|gif|ico|svg|json)$/)) {
+      const homeResponse = await fetch(sourceBase + 'index.html');
+      if (homeResponse.status === 200) {
+        response = homeResponse;
+        path = 'index.html'; 
+      } else {
+        return new Response("404: Page Not Found", { status: 404 });
+      }
+    }
+  }
+
+  // 4. BERSIHKAN SECURITY HEADER
+  const newHeaders = new Headers(response.headers);
+  newHeaders.delete("Content-Security-Policy");
+  newHeaders.delete("X-Content-Type-Options");
+  newHeaders.delete("X-Frame-Options");
+  newHeaders.delete("Strict-Transport-Security");
+
+  // 5. SET MIME TYPE
+  let mimeType = newHeaders.get("Content-Type");
+  if (path.endsWith(".html")) mimeType = "text/html; charset=utf-8";
+  else if (path.endsWith(".css")) mimeType = "text/css; charset=utf-8";
+  else if (path.endsWith(".js")) mimeType = "application/javascript; charset=utf-8";
+  else if (path.endsWith(".json")) mimeType = "application/json";
+  else if (path.endsWith(".svg")) mimeType = "image/svg+xml";
+
+  newHeaders.set("Content-Type", mimeType);
+  newHeaders.set("Access-Control-Allow-Origin", "*");
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders
+  });
+});`;
                 });
 
                 const copyWorkerCode = () => {
-                    navigator.clipboard.writeText(generatedWorkerCode.value);
-                    alert('Kode Worker berhasil disalin!');
+                    const codeToCopy = activeDomainTab.value === 'cloudflare' ? generatedWorkerCode.value : generatedDenoCode.value;
+                    navigator.clipboard.writeText(codeToCopy);
+                    alert(`Kode ${activeDomainTab.value === 'cloudflare' ? 'Cloudflare' : 'Deno'} berhasil disalin!`);
                 };
 
                 return {
@@ -523,7 +620,7 @@
                     projectName, uploadType, rawHtmlCode, htmlInput, zipInput, selectedFileName, handleFile, deploy,
                     deployments, getViewerLink, copyLink, deleteSite, backupSite,
                     sanitizeProjectName: () => projectName.value = projectName.value.replace(/[^a-z0-9-]/g, '').toLowerCase(),
-                    showModal, activeModalProject, openDomainSettings, generatedWorkerCode, copyWorkerCode
+                    showModal, activeModalProject, openDomainSettings, generatedWorkerCode, generatedDenoCode, copyWorkerCode, activeDomainTab
                 };
             }
         }).mount('#app');
