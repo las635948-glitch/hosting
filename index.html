@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MiniHost Advanced</title>
+    <title>MiniHost Advanced Pro</title>
     
-    <!-- CSS & Helper -->
+    <!-- Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -16,7 +16,17 @@
     <style>
         [v-cloak] { display: none !important; }
         body { background-color: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', sans-serif; }
-        .loading-view { height: 100vh; display: flex; justify-content: center; align-items: center; background: #fff; color: #333; }
+        
+        /* Viewer Styles */
+        .loading-view { 
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column;
+            justify-content: center; 
+            align-items: center; 
+            background: #ffffff; 
+            color: #333; 
+        }
         
         textarea.code-editor {
             font-family: 'Courier New', Courier, monospace;
@@ -31,29 +41,82 @@
 </head>
 <body>
 
-    <!-- 1. VIEWER MODE -->
+    <!-- ========================================== -->
+    <!-- 1. VIEWER MODE (LOGIKA UTAMA AGAR JALAN) -->
+    <!-- ========================================== -->
     <script>
         const params = new URLSearchParams(window.location.search);
         const viewPath = params.get('view');
+        
+        // KONFIGURASI SUPABASE ANDA
         const SB_URL = 'https://wmhhrcgvnfjsgeideyut.supabase.co';
         const SB_BUCKET = 'hosting';
 
         if (viewPath) {
-            document.body.innerHTML = '<div class="loading-view"><h3>Sedang Memuat Website...</h3></div>';
+            // Tampilkan Loading Screen
+            document.body.innerHTML = `
+                <div class="loading-view">
+                    <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 3rem; color: #3b82f6; margin-bottom: 1rem;"></i>
+                    <h3 style="font-family: sans-serif; color: #475569;">Sedang Memuat Website...</h3>
+                </div>`;
+
+            // URL File yang dituju
             const fileUrl = `${SB_URL}/storage/v1/object/public/${SB_BUCKET}/${viewPath}`;
-            fetch(fileUrl).then(r => {
-                if (!r.ok) throw new Error("File tidak ditemukan");
+            
+            // Base URL (Folder parent) untuk mengatasi relative path (css/style.css, img/logo.png)
+            const baseUrl = fileUrl.substring(0, fileUrl.lastIndexOf('/')) + '/';
+
+            fetch(fileUrl)
+            .then(r => {
+                if (!r.ok) throw new Error(`Gagal memuat file (${r.status})`);
+                const type = r.headers.get('content-type');
+                
+                // Jika bukan HTML (misal buka gambar langsung), redirect saja ke file aslinya
+                if (type && !type.includes('text/html')) {
+                    window.location.replace(fileUrl);
+                    return null;
+                }
                 return r.text();
-            }).then(html => {
-                document.open(); document.write(html); document.close();
-            }).catch(err => {
-                document.body.innerHTML = `<div style="text-align:center;padding:50px;color:red"><h2>Error 404</h2><p>${err.message}</p></div>`;
+            })
+            .then(html => {
+                if(!html) return;
+
+                // INJECT <base> TAG
+                // Ini memaksa browser mencari file relative di server Supabase, bukan di localhost/dashboard
+                let fixedHtml = html;
+                const baseTag = `<base href="${baseUrl}">`;
+
+                if (fixedHtml.toLowerCase().includes('<head>')) {
+                    fixedHtml = fixedHtml.replace(/<head>/i, `<head>${baseTag}`);
+                } else {
+                    fixedHtml = `${baseTag}${fixedHtml}`;
+                }
+
+                // Render ulang halaman
+                document.open(); 
+                document.write(fixedHtml); 
+                document.close();
+            })
+            .catch(err => {
+                document.body.innerHTML = `
+                    <div style="height:100vh;display:flex;justify-content:center;align-items:center;background:#0f172a;color:white;font-family:sans-serif;text-align:center">
+                        <div>
+                            <i class="fa-solid fa-triangle-exclamation" style="font-size:3rem;color:#ef4444;margin-bottom:1rem"></i>
+                            <h2>Website Tidak Ditemukan</h2>
+                            <p style="color:#94a3b8;margin-bottom:20px">${err.message}</p>
+                            <a href="/" style="background:#3b82f6;color:white;padding:10px 20px;text-decoration:none;border-radius:5px">Kembali ke Dashboard</a>
+                        </div>
+                    </div>`;
             });
-            throw new Error("Viewer Mode"); 
+            
+            // Hentikan eksekusi script dashboard di bawah
+            throw new Error("Viewer Mode Active - Stopping Dashboard Execution"); 
         }
     </script>
 
-    <!-- 2. DASHBOARD APP -->
+    <!-- ========================================== -->
+    <!-- 2. DASHBOARD APLIKASI -->
+    <!-- ========================================== -->
     <div id="app" v-cloak class="container mx-auto p-4 max-w-2xl pb-20">
         
         <!-- Header -->
@@ -167,15 +230,12 @@
                             </p>
                         </div>
                         <div class="flex gap-1">
-                             <!-- TOMBOL DOMAIN -->
                              <button @click="openDomainSettings(dep)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1.5 rounded text-xs transition" title="Setting Domain">
-                                <i class="fa-solid fa-globe"></i> Domain
+                                <i class="fa-solid fa-globe"></i>
                             </button>
-                            <!-- TOMBOL BACKUP -->
                             <button @click="backupSite(dep)" class="bg-yellow-600/20 border border-yellow-600 hover:bg-yellow-600 text-yellow-500 hover:text-white px-3 py-1.5 rounded text-xs transition" title="Download ZIP">
                                 <i class="fa-solid fa-download"></i>
                             </button>
-                            <!-- TOMBOL DELETE -->
                             <button @click="deleteSite(dep)" class="bg-red-600/20 border border-red-600 hover:bg-red-600 text-red-500 hover:text-white px-3 py-1.5 rounded text-xs transition" title="Hapus">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
@@ -183,7 +243,7 @@
                     </div>
                     
                     <div class="bg-black/30 p-2 rounded text-xs font-mono text-gray-400 flex justify-between items-center">
-                        <span class="truncate mr-2">{{ getViewerLink(dep.site_name) }}</span>
+                        <span class="truncate mr-2 text-green-400">{{ getViewerLink(dep.site_name) }}</span>
                         <button @click="copyLink(getViewerLink(dep.site_name))" class="text-blue-400 hover:text-white"><i class="fa-regular fa-copy"></i></button>
                     </div>
                 </div>
@@ -200,8 +260,7 @@
                     </div>
                     <div class="p-6 overflow-y-auto">
                         <p class="text-sm text-gray-300 mb-4">
-                            Salin kode di bawah ini ke Cloudflare Workers Anda.
-                            Link <code>origin</code> sudah disesuaikan otomatis dengan project <b>{{ activeModalProject }}</b>.
+                            Salin kode di bawah ini ke <b>Cloudflare Workers</b> agar website Anda bisa diakses menggunakan domain sendiri yang cantik.
                         </p>
                         <div class="relative">
                             <textarea readonly class="w-full h-64 bg-black text-green-400 font-mono text-xs p-4 rounded border border-gray-700 outline-none resize-none" spellcheck="false">{{ generatedWorkerCode }}</textarea>
@@ -287,6 +346,29 @@
                     if(file) selectedFileName.value = file.name;
                 };
 
+                // Helper untuk mendapatkan MIME Type yang benar
+                const getMimeType = (filename) => {
+                    const ext = filename.split('.').pop().toLowerCase();
+                    const mimeTypes = {
+                        'html': 'text/html',
+                        'htm': 'text/html',
+                        'css': 'text/css',
+                        'js': 'application/javascript',
+                        'json': 'application/json',
+                        'png': 'image/png',
+                        'jpg': 'image/jpeg',
+                        'jpeg': 'image/jpeg',
+                        'gif': 'image/gif',
+                        'svg': 'image/svg+xml',
+                        'ico': 'image/x-icon',
+                        'txt': 'text/plain',
+                        'xml': 'application/xml',
+                        'mp3': 'audio/mpeg',
+                        'mp4': 'video/mp4'
+                    };
+                    return mimeTypes[ext] || 'application/octet-stream';
+                };
+
                 const deploy = async () => {
                     if(!projectName.value) return;
                     loading.value = true; statusMsg.value = 'Inisialisasi...';
@@ -295,17 +377,20 @@
                     const basePath = `${userId}/${projectName.value}`;
                     
                     try {
+                        // 1. UPLOAD RAW CODE
                         if(uploadType.value === 'code') {
                             const blob = new Blob([rawHtmlCode.value], { type: 'text/html' });
                             statusMsg.value = 'Mengupload kode...';
                             await uploadToSupabase(basePath, 'index.html', blob, 'text/html');
                         } 
+                        // 2. UPLOAD SINGLE HTML
                         else if(uploadType.value === 'single') {
                             const file = htmlInput.value.files[0];
                             if(!file) throw new Error("Pilih file HTML dulu");
                             statusMsg.value = 'Mengupload file...';
                             await uploadToSupabase(basePath, 'index.html', file, 'text/html');
                         } 
+                        // 3. UPLOAD ZIP (DENGAN MIME TYPE FIX)
                         else {
                             const file = zipInput.value.files[0];
                             if(!file) throw new Error("Pilih file ZIP dulu");
@@ -318,14 +403,12 @@
                             let count = 0;
                             
                             for(const f of fileNames) {
+                                // Abaikan folder, proses hanya file
                                 if(!contents.files[f].dir) {
                                     const contentBlob = await contents.files[f].async('blob');
-                                    let mime = 'application/octet-stream';
-                                    if(f.endsWith('.html')) mime = 'text/html';
-                                    else if(f.endsWith('.css')) mime = 'text/css';
-                                    else if(f.endsWith('.js')) mime = 'application/javascript';
-                                    else if(f.endsWith('.png')) mime = 'image/png';
-                                    else if(f.endsWith('.jpg')) mime = 'image/jpeg';
+                                    
+                                    // DETEKSI MIME TYPE
+                                    const mime = getMimeType(f);
                                     
                                     statusMsg.value = `Upload: ${f} (${count+1}/${fileNames.length})`;
                                     await uploadToSupabase(basePath, f, contentBlob, mime);
@@ -334,6 +417,7 @@
                             }
                         }
 
+                        // SIMPAN KE DATABASE
                         const { error } = await sbClient.from('deployments').upsert({
                             user_id: userId, 
                             site_name: projectName.value, 
@@ -342,7 +426,7 @@
                         
                         if(error) throw error;
 
-                        alert('✅ Deploy Berhasil!');
+                        alert('✅ Deploy Berhasil! Silakan buka link viewer.');
                         fetchDeployments();
                         projectName.value = '';
                         selectedFileName.value = '';
@@ -357,7 +441,11 @@
                 const uploadToSupabase = async (path, filename, body, type) => {
                     const { error } = await sbClient.storage
                         .from(SB_BUCKET)
-                        .upload(`${path}/${filename}`, body, { upsert: true, contentType: type });
+                        .upload(`${path}/${filename}`, body, { 
+                            upsert: true, 
+                            contentType: type,
+                            cacheControl: '3600'
+                        });
                     if(error) throw error;
                 };
 
@@ -414,6 +502,7 @@
 
                 const getViewerLink = (siteName) => {
                     const currentHost = window.location.origin + window.location.pathname;
+                    // Hapus query params yang ada
                     const cleanHost = currentHost.split('?')[0];
                     const path = `${user.value.id}/${siteName}/index.html`;
                     return `${cleanHost}?view=${path}`;
@@ -430,63 +519,37 @@
                     showModal.value = true;
                 };
 
-                // --- INI BAGIAN YANG DIPERBAIKI (WORKER BARU) ---
                 const generatedWorkerCode = computed(() => {
                     return `export default {
   async fetch(request) {
     const url = new URL(request.url);
-    
-    // --- 1. SETTING SUMBER FILE ---
-    // Link ini WAJIB mengarah ke Supabase (Storage Asli)
     const origin = "${activeOriginUrl.value}";
     
-    // --- 2. LOGIKA ROUTING (PENTING) ---
     let path = url.pathname;
+    if (path === '/' || path === '') path = 'index.html';
+    else if (path.endsWith('/')) path += 'index.html';
     
-    // ATURAN A: Jika buka domain utama, arahkan ke index.html
-    if (path === '/' || path === '') {
-      path = 'index.html';
-    } 
-    // ATURAN B: Jika buka folder (akhiran /), cari index.html di dalamnya
-    else if (path.endsWith('/')) {
-      path += 'index.html';
-    }
+    if (path.startsWith('/')) path = path.substring(1);
     
-    // Bersihkan slash di depan agar link Supabase nyambung
-    if (path.startsWith('/')) {
-      path = path.substring(1);
-    }
-    
-    // Gabungkan Link
     const targetURL = origin + path + url.search;
     
-    // --- 3. PROSES AMBIL FILE ---
-    const cache = caches.default;
-    let response = await cache.match(targetURL);
-    
-    if (!response) {
-      // Ambil file apapun yang diminta (CSS, JS, PNG, HTML)
-      let fetched = await fetch(targetURL, {
+    let response = await fetch(targetURL, {
         headers: { "User-Agent": "MiniHost-Worker" }
-      });
+    });
 
-      // OPTIONAL: Fallback untuk SPA (React/Vue) jika 404
-      if(fetched.status === 404 && !path.includes('.')) {
-          fetched = await fetch(origin + 'index.html');
-      }
-
-      // Buat respon baru
-      response = new Response(fetched.body, fetched);
-      response.headers.set("Access-Control-Allow-Origin", "*");
-      response.headers.set("Cache-Control", "public, max-age=3600"); // Cache 1 Jam
-      
-      // Simpan di cache jika sukses
-      if(fetched.status === 200) {
-        try { cache.put(targetURL, response.clone()); } catch (e) {}
-      }
+    // Fallback SPA (Optional)
+    if(response.status === 404 && !path.includes('.')) {
+        response = await fetch(origin + 'index.html');
     }
+
+    const newResponse = new Response(response.body, response);
+    newResponse.headers.set("Access-Control-Allow-Origin", "*");
     
-    return response;
+    // Fix Content-Type jika perlu
+    if(path.endsWith('.css')) newResponse.headers.set("Content-Type", "text/css");
+    if(path.endsWith('.js')) newResponse.headers.set("Content-Type", "application/javascript");
+    
+    return newResponse;
   }
 }`;
                 });
