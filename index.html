@@ -8,28 +8,25 @@
     <!-- CSS: Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- PENTING: Style untuk menyembunyikan tampilan rusak saat loading -->
     <style>
         [v-cloak] { display: none !important; }
         .loading-screen { display: flex; justify-content: center; align-items: center; height: 100vh; font-family: sans-serif; }
     </style>
 
-    <!-- LIBRARY (Menggunakan CDNJS yang lebih stabil) -->
+    <!-- LIBRARY -->
     <!-- 1. Vue.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
-    <!-- 2. Supabase -->
+    <!-- 2. Supabase JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- 3. JSZip -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-800">
 
-    <!-- Loading Screen (Muncul jika Vue belum siap) -->
     <div id="loading" class="loading-screen text-gray-500">
         <p>Memuat Aplikasi...</p>
     </div>
 
-    <!-- Container Utama App -->
     <div id="app" v-cloak class="container mx-auto p-4 max-w-xl pb-20">
         
         <!-- HEADER -->
@@ -40,12 +37,12 @@
             </button>
         </div>
 
-        <!-- ALERT BOX (Untuk Error) -->
+        <!-- ALERT BOX -->
         <div v-if="errorMsg" class="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm border border-red-200 text-center">
             {{ errorMsg }}
         </div>
 
-        <!-- HALAMAN LOGIN / REGISTER -->
+        <!-- LOGIN / REGISTER -->
         <div v-if="!user">
             <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
                 <h2 class="text-xl font-bold mb-2 text-center">{{ isLoginMode ? 'Login Akun' : 'Daftar Baru' }}</h2>
@@ -54,11 +51,11 @@
                 <form @submit.prevent="handleAuth" class="space-y-4">
                     <div>
                         <label class="text-xs font-bold text-gray-500 uppercase">Email</label>
-                        <input v-model="email" type="email" required class="w-full mt-1 border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="nama@email.com">
+                        <input v-model="email" type="email" required class="w-full mt-1 border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
                     </div>
                     <div>
                         <label class="text-xs font-bold text-gray-500 uppercase">Password</label>
-                        <input v-model="password" type="password" required class="w-full mt-1 border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="******">
+                        <input v-model="password" type="password" required class="w-full mt-1 border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
                     </div>
                     <button type="submit" :disabled="loading" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition disabled:opacity-50">
                         {{ loading ? 'Memproses...' : (isLoginMode ? 'Masuk' : 'Daftar') }}
@@ -71,26 +68,21 @@
             </div>
         </div>
 
-        <!-- HALAMAN DASHBOARD (Setelah Login) -->
+        <!-- DASHBOARD -->
         <div v-else>
-            
-            <!-- Form Upload -->
             <div class="bg-white p-5 rounded-xl shadow-md border border-gray-100 mb-6">
                 <h3 class="font-bold text-lg mb-4">📤 Upload Website</h3>
                 
-                <!-- Nama Project -->
                 <div class="mb-4">
                     <label class="text-xs font-bold text-gray-500 uppercase">Nama Project (Slug)</label>
                     <input v-model="projectName" type="text" placeholder="contoh: portofolio-ku" class="w-full mt-1 border p-2 rounded-lg bg-gray-50 text-sm" @input="sanitizeProjectName">
                 </div>
 
-                <!-- Pilihan Tipe -->
                 <div class="flex gap-2 mb-4 bg-gray-100 p-1 rounded-lg">
                     <button @click="uploadType = 'zip'" :class="uploadType === 'zip' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'" class="flex-1 py-1.5 text-sm rounded-md font-medium transition">ZIP File</button>
                     <button @click="uploadType = 'raw'" :class="uploadType === 'raw' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'" class="flex-1 py-1.5 text-sm rounded-md font-medium transition">Raw HTML</button>
                 </div>
 
-                <!-- Input ZIP -->
                 <div v-if="uploadType === 'zip'" class="mb-4">
                     <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50">
                         <input type="file" ref="fileInput" accept=".zip" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
@@ -98,24 +90,20 @@
                     <p class="text-xs text-gray-400 mt-2 text-center">Upload file .zip (harus ada index.html)</p>
                 </div>
 
-                <!-- Input Raw -->
                 <div v-if="uploadType === 'raw'" class="mb-4">
                     <textarea v-model="rawHtml" rows="5" class="w-full border p-2 rounded-lg font-mono text-xs bg-gray-900 text-green-400" placeholder="<html>...</html>"></textarea>
                 </div>
 
-                <!-- Tombol Deploy -->
                 <button @click="deploy" :disabled="loading || !projectName" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition disabled:opacity-50 flex justify-center items-center gap-2">
                     <span v-if="loading">⏳</span>
                     {{ loading ? 'Sedang Deploy...' : '🚀 Deploy Sekarang' }}
                 </button>
                 
-                <!-- Status -->
                 <div v-if="statusMsg" class="mt-3 text-xs text-center font-mono text-blue-600 bg-blue-50 p-2 rounded">
                     {{ statusMsg }}
                 </div>
             </div>
 
-            <!-- List Website -->
             <div class="space-y-3">
                 <h3 class="font-bold text-gray-700 px-1">🌐 Website Anda</h3>
                 <div v-if="deployments.length === 0" class="text-center py-10 bg-white rounded-xl border border-dashed border-gray-300 text-gray-400 text-sm">
@@ -136,27 +124,27 @@
 
     </div>
 
-    <!-- SCRIPT UTAMA -->
     <script>
-        // Cek apakah Vue berhasil dimuat
-        if (typeof Vue === 'undefined') {
-            document.getElementById('loading').innerHTML = '<p style="color:red; font-weight:bold; text-align:center; padding:20px;">Gagal memuat Library Vue.js.<br>Mohon cek koneksi internet Anda.</p>';
-            throw new Error("Vue not loaded");
-        }
-
         const { createApp, ref, onMounted } = Vue;
 
-        // KONFIGURASI SUPABASE
+        // --- SETUP SUPABASE ---
         const SUPABASE_URL = 'https://wmhhrcgvnfjsgeideyut.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtaGhyY2d2bmZqc2dlaWRleXV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUxMjgyOTEsImV4cCI6MjA4MDcwNDI5MX0.sCewtOfQWDNtWVjpn_aLxUcIWuaiwlSoeO07ORW5Znk';
         const BUCKET_NAME = 'hosting';
 
-        // Inisialisasi Supabase dengan Error Handling sederhana
-        let supabase;
+        // PERBAIKAN: Menggunakan nama variabel berbeda 'sbClient' agar tidak bentrok
+        // dengan variabel global 'supabase' dari library CDN.
+        let sbClient = null;
+
         try {
-            supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            // Kita panggil window.supabase untuk memastikan kita pakai library yang benar
+            if (window.supabase) {
+                sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            } else {
+                alert("Library Supabase gagal dimuat. Refresh halaman.");
+            }
         } catch (err) {
-            alert("Gagal inisialisasi Supabase: " + err.message);
+            console.error(err);
         }
 
         const app = createApp({
@@ -175,46 +163,44 @@
                 const fileInput = ref(null);
                 const deployments = ref([]);
 
-                // Fungsi membersihkan nama project
                 const sanitizeProjectName = () => {
                     projectName.value = projectName.value.replace(/[^a-z0-9-]/g, '').toLowerCase();
                 };
 
                 onMounted(async () => {
-                    // Hilangkan loading screen manual
                     document.getElementById('loading').style.display = 'none';
+                    if (!sbClient) return; // Stop jika supabase error
 
-                    try {
-                        const { data: { session } } = await supabase.auth.getSession();
-                        if (session) {
-                            user.value = session.user;
-                            fetchDeployments();
-                        }
-                        supabase.auth.onAuthStateChange((_event, session) => {
-                            user.value = session ? session.user : null;
-                            if(user.value) fetchDeployments();
-                            else deployments.value = [];
-                        });
-                    } catch (e) {
-                        console.error("Auth Check Error:", e);
+                    // Menggunakan sbClient (bukan supabase)
+                    const { data: { session } } = await sbClient.auth.getSession();
+                    if (session) {
+                        user.value = session.user;
+                        fetchDeployments();
                     }
+                    
+                    sbClient.auth.onAuthStateChange((_event, session) => {
+                        user.value = session ? session.user : null;
+                        if(user.value) fetchDeployments();
+                        else deployments.value = [];
+                    });
                 });
 
                 const handleAuth = async () => {
+                    if (!sbClient) return;
                     loading.value = true;
                     errorMsg.value = '';
                     try {
                         let result;
                         if (isLoginMode.value) {
-                            result = await supabase.auth.signInWithPassword({ email: email.value, password: password.value });
+                            result = await sbClient.auth.signInWithPassword({ email: email.value, password: password.value });
                         } else {
-                            result = await supabase.auth.signUp({ email: email.value, password: password.value });
+                            result = await sbClient.auth.signUp({ email: email.value, password: password.value });
                         }
                         
                         if (result.error) throw result.error;
                         
                         if (!isLoginMode.value && !result.data.session) {
-                            alert('Sukses! Silakan login.');
+                            alert('Pendaftaran berhasil! Silakan login (atau cek email jika konfirmasi aktif).');
                             isLoginMode.value = true;
                         }
                     } catch (e) {
@@ -225,14 +211,13 @@
                 };
 
                 const logout = async () => {
-                    await supabase.auth.signOut();
+                    await sbClient.auth.signOut();
                 };
 
                 const deploy = async () => {
                     if(!projectName.value) return;
                     loading.value = true;
-                    statusMsg.value = 'Memulai...';
-                    errorMsg.value = '';
+                    statusMsg.value = 'Memulai proses...';
                     
                     const userId = user.value.id;
                     const basePath = `${userId}/${projectName.value}`; 
@@ -246,7 +231,7 @@
                             const file = fileInput.value.files[0];
                             if (!file) throw new Error("Pilih file ZIP dulu!");
 
-                            statusMsg.value = 'Buka ZIP...';
+                            statusMsg.value = 'Ekstrak ZIP...';
                             const zip = new JSZip();
                             const contents = await zip.loadAsync(file);
                             
@@ -259,7 +244,6 @@
                                     statusMsg.value = `Upload ${i}/${keys.length}: ${filename}`;
                                     const blob = await fileData.async('blob');
                                     
-                                    // Mime Type Check Sederhana
                                     let type = 'application/octet-stream';
                                     if(filename.endsWith('.html')) type = 'text/html';
                                     else if(filename.endsWith('.css')) type = 'text/css';
@@ -272,11 +256,10 @@
                             }
                         }
 
-                        // Simpan ke DB
                         statusMsg.value = 'Simpan Database...';
                         const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET_NAME}/${basePath}/index.html`;
                         
-                        const { error: dbError } = await supabase
+                        const { error: dbError } = await sbClient
                             .from('deployments')
                             .insert([{
                                 user_id: userId,
@@ -295,14 +278,14 @@
                     } catch (e) {
                         console.error(e);
                         errorMsg.value = 'Gagal: ' + e.message;
-                        statusMsg.value = 'Error Terjadi.';
+                        statusMsg.value = 'Error.';
                     } finally {
                         loading.value = false;
                     }
                 };
 
                 const uploadFile = async (basePath, filename, fileBody, contentType) => {
-                    const { error } = await supabase.storage
+                    const { error } = await sbClient.storage
                         .from(BUCKET_NAME)
                         .upload(`${basePath}/${filename}`, fileBody, {
                             cacheControl: '3600',
@@ -313,7 +296,7 @@
                 };
 
                 const fetchDeployments = async () => {
-                    const { data, error } = await supabase
+                    const { data, error } = await sbClient
                         .from('deployments')
                         .select('*')
                         .eq('user_id', user.value.id)
