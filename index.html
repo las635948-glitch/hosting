@@ -295,6 +295,7 @@
                     const basePath = `${userId}/${projectName.value}`;
                     
                     try {
+                        // 1. UPLOAD FILES
                         if(uploadType.value === 'code') {
                             const blob = new Blob([rawHtmlCode.value], { type: 'text/html' });
                             statusMsg.value = 'Mengupload kode...';
@@ -326,6 +327,8 @@
                                     else if(f.endsWith('.js')) mime = 'application/javascript';
                                     else if(f.endsWith('.png')) mime = 'image/png';
                                     else if(f.endsWith('.jpg')) mime = 'image/jpeg';
+                                    else if(f.endsWith('.svg')) mime = 'image/svg+xml';
+                                    else if(f.endsWith('.json')) mime = 'application/json';
                                     
                                     statusMsg.value = `Upload: ${f} (${count+1}/${fileNames.length})`;
                                     await uploadToSupabase(basePath, f, contentBlob, mime);
@@ -334,13 +337,37 @@
                             }
                         }
 
-                        const { error } = await sbClient.from('deployments').upsert({
-                            user_id: userId, 
-                            site_name: projectName.value, 
-                            public_url: `${basePath}/index.html` 
-                        }, { onConflict: 'site_name, user_id' });
+                        // 2. SIMPAN KE DATABASE (LOGIC DIPERBAIKI: HINDARI ONCONFLICT ERROR)
+                        statusMsg.value = 'Menyimpan data...';
                         
-                        if(error) throw error;
+                        // Cek apakah data sudah ada?
+                        const { data: existingData } = await sbClient
+                            .from('deployments')
+                            .select('id')
+                            .eq('user_id', userId)
+                            .eq('site_name', projectName.value)
+                            .maybeSingle();
+
+                        let dbError = null;
+
+                        if (existingData) {
+                            // Jika ada, UPDATE
+                            const { error } = await sbClient.from('deployments').update({
+                                public_url: `${basePath}/index.html`,
+                                created_at: new Date() // update timestamp
+                            }).eq('id', existingData.id);
+                            dbError = error;
+                        } else {
+                            // Jika tidak ada, INSERT
+                            const { error } = await sbClient.from('deployments').insert({
+                                user_id: userId,
+                                site_name: projectName.value,
+                                public_url: `${basePath}/index.html`
+                            });
+                            dbError = error;
+                        }
+                        
+                        if(dbError) throw dbError;
 
                         alert('✅ Deploy Berhasil!');
                         fetchDeployments();
@@ -430,51 +457,57 @@
                     showModal.value = true;
                 };
 
-                // --- FIX: WORKER GENERATOR (Mencegah Raw Text) ---
+                // --- GENERATOR WORKER (FINAL FIX) ---
                 const generatedWorkerCode = computed(() => {
                     return `export default {
   async fetch(request) {
     const url = new URL(request.url);
-    
-    // 1. Definisikan Base URL (Supabase Storage)
     const sourceBase = "${activeOriginUrl.value}";
 
-    // 2. Bersihkan & Tentukan Path
     let path = url.pathname;
+    // Bersihkan slash awal
     if (path.startsWith('/')) path = path.substring(1);
+    
+    // Routing Default ke Index
     if (path === '' || path.endsWith('/')) path += 'index.html';
 
-    // 3. Fetch ke Supabase
     const targetUrl = sourceBase + path;
+    
+    // 1. FETCH DARI SUPABASE
     let response = await fetch(targetUrl);
 
-    // 4. SPA Fallback (Jika 404, coba load index.html)
-    if (response.status === 404 && !path.includes('.')) {
-      const homeResponse = await fetch(sourceBase + 'index.html');
-      if (homeResponse.status === 200) {
-        response = homeResponse;
-        path = 'index.html'; // Update path agar deteksi MIME type benar
+    // 2. HANDLE 404
+    if (response.status === 404) {
+      // Jika bukan file aset, load index.html (SPA Fallback)
+      if (!path.match(/\\.(css|js|png|jpg|jpeg|gif|ico|svg|json)$/)) {
+        const homeResponse = await fetch(sourceBase + 'index.html');
+        if (homeResponse.status === 200) {
+          response = homeResponse;
+          path = 'index.html'; 
+        } else {
+          return new Response("404: Page Not Found", { status: 404 });
+        }
+      } else {
+         return response; // Biarkan 404 jika file CSS/JS hilang
       }
     }
 
-    // 5. PENENTUAN CONTENT-TYPE (AGAR TIDAK JADI TEXT BIASA)
-    let mimeType = response.headers.get("Content-Type") || "text/plain";
+    // 3. SET MIME TYPE
+    let mimeType = response.headers.get("Content-Type");
     
-    // Paksa browser merender HTML/CSS/JS
     if (path.endsWith(".html")) mimeType = "text/html; charset=utf-8";
-    else if (path.endsWith(".css")) mimeType = "text/css";
-    else if (path.endsWith(".js")) mimeType = "application/javascript";
+    else if (path.endsWith(".css")) mimeType = "text/css; charset=utf-8";
+    else if (path.endsWith(".js")) mimeType = "application/javascript; charset=utf-8";
     else if (path.endsWith(".json")) mimeType = "application/json";
     else if (path.endsWith(".png")) mimeType = "image/png";
     else if (path.endsWith(".jpg") || path.endsWith(".jpeg")) mimeType = "image/jpeg";
+    else if (path.endsWith(".svg")) mimeType = "image/svg+xml";
 
-    // 6. Buat Response Baru
     const newHeaders = new Headers(response.headers);
     newHeaders.set("Content-Type", mimeType);
     newHeaders.set("Access-Control-Allow-Origin", "*");
     
-    // Hapus header yang bikin konflik di Cloudflare
-    newHeaders.delete("Content-Encoding"); 
+    // Bersihkan header konflik
     newHeaders.delete("X-Content-Type-Options");
 
     return new Response(response.body, {
