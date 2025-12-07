@@ -454,7 +454,7 @@
                     showModal.value = true;
                 };
 
-                // --- GENERATOR WORKER (SUDAH DI-UPDATE SUPAYA CSS/JS JALAN) ---
+                // --- GENERATOR WORKER (FINAL FIX WITH CLOSING BRACES) ---
                 const generatedWorkerCode = computed(() => {
                     return `export default {
   async fetch(request, env, ctx) {
@@ -510,7 +510,7 @@
       headers: newHeaders
     });
   }
-}`;
+};`; // <--- PENUTUP YANG HILANG SUDAH DITAMBAHKAN DI SINI
                 });
 
                 const copyWorkerCode = () => {
