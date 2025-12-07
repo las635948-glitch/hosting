@@ -3,155 +3,270 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MiniHost System</title>
+    <title>MiniHost Advanced</title>
     
     <!-- CSS & Helper -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script> <!-- Untuk Download -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
     <style>
         [v-cloak] { display: none !important; }
-        body { background-color: #0f172a; color: #e2e8f0; font-family: sans-serif; }
+        body { background-color: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', sans-serif; }
         .loading-view { height: 100vh; display: flex; justify-content: center; align-items: center; background: #fff; color: #333; }
+        
+        /* Scrollbar untuk Textarea Code */
+        textarea.code-editor {
+            font-family: 'Courier New', Courier, monospace;
+            white-space: pre;
+            overflow-wrap: normal;
+            overflow-x: scroll;
+        }
+        
+        /* Modal Transition */
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
     </style>
 </head>
 <body>
 
-    <!-- 1. VIEW MODE (JIKA LINK ?VIEW= ADA) -->
-    <!-- Bagian ini menangani rendering agar HTML TAMPIL, bukan jadi teks -->
+    <!-- 1. VIEWER MODE (TIDAK BERUBAH) -->
     <script>
-        // Cek URL apakah ada parameter ?view=...
         const params = new URLSearchParams(window.location.search);
         const viewPath = params.get('view');
-        
-        // KONFIGURASI SUPABASE (Sama seperti bawah)
         const SB_URL = 'https://wmhhrcgvnfjsgeideyut.supabase.co';
         const SB_BUCKET = 'hosting';
 
         if (viewPath) {
-            // Hentikan loading Dashboard, kita masuk mode Viewer
             document.body.innerHTML = '<div class="loading-view"><h3>Sedang Memuat Website...</h3></div>';
-            
             const fileUrl = `${SB_URL}/storage/v1/object/public/${SB_BUCKET}/${viewPath}`;
-
-            // Ambil isi file HTML dari Supabase dan Tulis ulang halaman ini
-            fetch(fileUrl)
-                .then(response => {
-                    if (!response.ok) throw new Error("File tidak ditemukan / Error");
-                    return response.text();
-                })
-                .then(html => {
-                    // MAGIC HAPPENS HERE: Paksa browser merender HTML
-                    document.open();
-                    document.write(html);
-                    document.close();
-                })
-                .catch(err => {
-                    document.body.innerHTML = `<div style="padding:20px; text-align:center; color:red;">
-                        <h2>Gagal Memuat Website</h2>
-                        <p>${err.message}</p>
-                        <a href="/" style="color:blue">Kembali ke Dashboard</a>
-                    </div>`;
-                });
-                
-            // Stop eksekusi script dashboard di bawah
-            throw new Error("Mode Viewer Aktif - Stop Dashboard"); 
+            fetch(fileUrl).then(r => {
+                if (!r.ok) throw new Error("File tidak ditemukan");
+                return r.text();
+            }).then(html => {
+                document.open(); document.write(html); document.close();
+            }).catch(err => {
+                document.body.innerHTML = `<div style="text-align:center;padding:50px;color:red"><h2>Error 404</h2><p>${err.message}</p></div>`;
+            });
+            throw new Error("Viewer Mode"); 
         }
     </script>
 
-    <!-- 2. DASHBOARD MODE (JIKA BUKA HALAMAN UTAMA) -->
-    <div id="app" v-cloak class="container mx-auto p-4 max-w-xl pb-20">
+    <!-- 2. DASHBOARD APP -->
+    <div id="app" v-cloak class="container mx-auto p-4 max-w-2xl pb-20">
         
-        <div class="flex justify-between items-center mb-8 mt-4">
-            <h1 class="text-2xl font-bold text-white">🚀 MiniHost <span class="text-xs bg-blue-600 px-2 rounded">Viewer Mode</span></h1>
-            <button v-if="user" @click="logout" class="text-red-400 text-sm border border-red-900 bg-red-900/20 px-3 py-1 rounded">Logout</button>
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6 mt-4 border-b border-gray-700 pb-4">
+            <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-rocket text-blue-500"></i> MiniHost 
+                <span class="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded">Pro</span>
+            </h1>
+            <button v-if="user" @click="logout" class="text-red-400 text-sm border border-red-900 bg-red-900/20 px-4 py-2 rounded hover:bg-red-900/40 transition">
+                <i class="fa-solid fa-power-off"></i> Logout
+            </button>
         </div>
 
-        <div v-if="!user">
-            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700">
-                <h2 class="text-xl font-bold mb-4 text-white text-center">{{ isLoginMode ? 'Login' : 'Daftar' }}</h2>
+        <!-- AUTH VIEW -->
+        <div v-if="!user" class="max-w-md mx-auto mt-10">
+            <div class="bg-gray-800 p-8 rounded-xl border border-gray-700 shadow-lg">
+                <h2 class="text-2xl font-bold mb-6 text-white text-center">{{ isLoginMode ? 'Login Akun' : 'Daftar Baru' }}</h2>
                 <form @submit.prevent="handleAuth" class="space-y-4">
-                    <input v-model="email" type="email" required class="w-full bg-gray-700 border border-gray-600 text-white p-3 rounded" placeholder="Email">
-                    <input v-model="password" type="password" required class="w-full bg-gray-700 border border-gray-600 text-white p-3 rounded" placeholder="Password">
-                    <button type="submit" :disabled="loading" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded">
-                        {{ loading ? 'Loading...' : (isLoginMode ? 'Masuk' : 'Daftar') }}
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Email</label>
+                        <input v-model="email" type="email" required class="w-full bg-gray-900 border border-gray-600 focus:border-blue-500 text-white p-3 rounded outline-none transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Password</label>
+                        <input v-model="password" type="password" required class="w-full bg-gray-900 border border-gray-600 focus:border-blue-500 text-white p-3 rounded outline-none transition">
+                    </div>
+                    <button type="submit" :disabled="loading" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded transition shadow-lg shadow-blue-500/30">
+                        <i v-if="loading" class="fa-solid fa-circle-notch fa-spin mr-2"></i>
+                        {{ loading ? 'Memproses...' : (isLoginMode ? 'Masuk' : 'Daftar') }}
                     </button>
                 </form>
-                <p class="text-center mt-4 text-gray-400 text-sm cursor-pointer" @click="isLoginMode = !isLoginMode">
-                    {{ isLoginMode ? 'Belum punya akun? Daftar' : 'Sudah punya akun? Login' }}
-                </p>
-                <p v-if="errorMsg" class="text-red-400 text-center mt-2 text-sm">{{ errorMsg }}</p>
+                <div class="mt-6 text-center border-t border-gray-700 pt-4">
+                    <p class="text-gray-400 text-sm cursor-pointer hover:text-white transition" @click="isLoginMode = !isLoginMode">
+                        {{ isLoginMode ? 'Belum punya akun? Daftar sekarang' : 'Sudah punya akun? Login disini' }}
+                    </p>
+                </div>
+                <p v-if="errorMsg" class="bg-red-900/50 border border-red-500 text-red-200 p-3 rounded mt-4 text-sm text-center">{{ errorMsg }}</p>
             </div>
         </div>
 
+        <!-- MAIN DASHBOARD -->
         <div v-else>
-            <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 mb-8">
-                <h3 class="font-bold text-lg mb-4 text-white">📤 Upload HTML / ZIP</h3>
+            <!-- UPLOAD CARD -->
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 mb-8 shadow-xl">
+                <h3 class="font-bold text-lg mb-4 text-white flex items-center gap-2">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Deploy Website Baru
+                </h3>
                 
-                <div class="mb-4">
-                    <label class="text-xs text-gray-500 uppercase block mb-1">Nama Project (Slug)</label>
-                    <input v-model="projectName" type="text" placeholder="web-saya" class="w-full bg-gray-700 border border-gray-600 text-white p-2 rounded" @input="sanitizeProjectName">
+                <div class="mb-5">
+                    <label class="text-xs text-gray-400 uppercase block mb-1 font-bold">Nama Project (Slug)</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-2.5 text-gray-500">/</span>
+                        <input v-model="projectName" type="text" placeholder="my-awesome-site" class="w-full bg-gray-900 border border-gray-600 text-white pl-6 p-2 rounded focus:border-blue-500 outline-none" @input="sanitizeProjectName">
+                    </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-2 mb-4">
-                    <button @click="uploadType='single'" :class="uploadType=='single'?'bg-blue-600':'bg-gray-700'" class="p-2 rounded text-sm text-white">Single HTML</button>
-                    <button @click="uploadType='zip'" :class="uploadType=='zip'?'bg-blue-600':'bg-gray-700'" class="p-2 rounded text-sm text-white">ZIP File</button>
+                <!-- TABS -->
+                <div class="grid grid-cols-3 gap-1 mb-4 bg-gray-900 p-1 rounded-lg">
+                    <button @click="uploadType='zip'" :class="uploadType=='zip'?'bg-blue-600 text-white shadow':'text-gray-400 hover:text-white'" class="py-2 rounded text-sm font-medium transition">ZIP File</button>
+                    <button @click="uploadType='single'" :class="uploadType=='single'?'bg-blue-600 text-white shadow':'text-gray-400 hover:text-white'" class="py-2 rounded text-sm font-medium transition">HTML File</button>
+                    <button @click="uploadType='code'" :class="uploadType=='code'?'bg-blue-600 text-white shadow':'text-gray-400 hover:text-white'" class="py-2 rounded text-sm font-medium transition">Raw Code</button>
                 </div>
 
-                <div v-if="uploadType === 'single'" class="mb-4 border-2 border-dashed border-gray-600 p-6 text-center rounded">
-                    <input type="file" ref="htmlInput" accept=".html" @change="handleFile" class="text-white text-sm">
-                </div>
-                <div v-if="uploadType === 'zip'" class="mb-4 border-2 border-dashed border-gray-600 p-6 text-center rounded">
-                    <input type="file" ref="zipInput" accept=".zip" @change="handleFile" class="text-white text-sm">
+                <!-- INPUT AREA -->
+                <div v-if="uploadType === 'single'" class="mb-4 border-2 border-dashed border-gray-600 hover:border-blue-500 bg-gray-700/30 p-8 text-center rounded-lg transition cursor-pointer" @click="$refs.htmlInput.click()">
+                    <i class="fa-brands fa-html5 text-4xl text-orange-500 mb-2"></i>
+                    <p class="text-sm text-gray-300">Klik untuk pilih file index.html</p>
+                    <input type="file" ref="htmlInput" accept=".html" @change="handleFile" class="hidden">
+                    <p v-if="selectedFileName" class="text-blue-400 text-xs mt-2">{{ selectedFileName }}</p>
                 </div>
 
-                <button @click="deploy" :disabled="loading || !projectName" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded">
-                    {{ loading ? 'Sedang Deploy...' : '🚀 DEPLOY' }}
+                <div v-if="uploadType === 'zip'" class="mb-4 border-2 border-dashed border-gray-600 hover:border-blue-500 bg-gray-700/30 p-8 text-center rounded-lg transition cursor-pointer" @click="$refs.zipInput.click()">
+                    <i class="fa-solid fa-file-zipper text-4xl text-yellow-500 mb-2"></i>
+                    <p class="text-sm text-gray-300">Klik untuk pilih file .zip</p>
+                    <input type="file" ref="zipInput" accept=".zip" @change="handleFile" class="hidden">
+                    <p v-if="selectedFileName" class="text-blue-400 text-xs mt-2">{{ selectedFileName }}</p>
+                </div>
+
+                <div v-if="uploadType === 'code'" class="mb-4">
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-xs text-gray-400">index.html</label>
+                        <span class="text-xs text-gray-500">Paste kode HTML Anda di sini</span>
+                    </div>
+                    <textarea v-model="rawHtmlCode" class="code-editor w-full h-48 bg-gray-900 border border-gray-600 text-green-400 p-3 rounded text-sm focus:border-blue-500 outline-none" placeholder="<!DOCTYPE html><html>...</html>"></textarea>
+                </div>
+
+                <button @click="deploy" :disabled="loading || !projectName" class="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white font-bold py-3 rounded shadow-lg shadow-green-500/20 transition transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i v-if="loading" class="fa-solid fa-spinner fa-spin mr-2"></i>
+                    {{ loading ? 'Sedang Deploy...' : '🚀 DEPLOY SEKARANG' }}
                 </button>
-                <p v-if="statusMsg" class="text-center text-xs mt-2 text-blue-300">{{ statusMsg }}</p>
+                <p v-if="statusMsg" class="text-center text-xs mt-3 text-blue-300 animate-pulse">{{ statusMsg }}</p>
             </div>
 
-            <!-- LIST WEBSITE (LINK SUDAH FIX ?VIEW=) -->
+            <!-- LIST WEBSITE -->
             <div>
-                <h3 class="font-bold text-gray-400 text-sm mb-2 uppercase">Web Anda</h3>
-                <div v-for="dep in deployments" :key="dep.id" class="bg-gray-800 p-4 rounded border border-gray-700 mb-2 flex justify-between items-center">
-                    <div class="overflow-hidden mr-2">
-                        <p class="font-bold text-white text-sm truncate">{{ dep.site_name }}</p>
-                        <p class="text-xs text-gray-500">{{ new Date(dep.created_at).toLocaleDateString() }}</p>
+                <h3 class="font-bold text-gray-400 text-xs mb-3 uppercase tracking-wider">Project Aktif ({{ deployments.length }})</h3>
+                
+                <div v-if="deployments.length === 0" class="text-center text-gray-500 py-10 bg-gray-800/50 rounded border border-dashed border-gray-700">
+                    Belum ada website yang dideploy
+                </div>
+
+                <div v-for="dep in deployments" :key="dep.id" class="bg-gray-800 p-4 rounded-lg border border-gray-700 mb-3 hover:border-gray-500 transition shadow-sm group">
+                    <div class="flex justify-between items-start mb-3">
+                        <div class="overflow-hidden mr-2">
+                            <h4 class="font-bold text-white text-lg truncate flex items-center">
+                                {{ dep.site_name }}
+                                <a :href="getViewerLink(dep.site_name)" target="_blank" class="ml-2 text-gray-500 hover:text-blue-400 text-xs"><i class="fa-solid fa-external-link-alt"></i></a>
+                            </h4>
+                            <p class="text-xs text-gray-500 mt-1">
+                                <i class="fa-regular fa-clock"></i> {{ new Date(dep.created_at).toLocaleString() }}
+                            </p>
+                        </div>
+                        <div class="flex gap-1">
+                             <!-- TOMBOL DOMAIN -->
+                             <button @click="openDomainSettings(dep)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1.5 rounded text-xs transition" title="Setting Domain">
+                                <i class="fa-solid fa-globe"></i> Domain
+                            </button>
+                            <!-- TOMBOL BACKUP -->
+                            <button @click="backupSite(dep)" class="bg-yellow-600/20 border border-yellow-600 hover:bg-yellow-600 text-yellow-500 hover:text-white px-3 py-1.5 rounded text-xs transition" title="Download ZIP">
+                                <i class="fa-solid fa-download"></i>
+                            </button>
+                            <!-- TOMBOL DELETE -->
+                            <button @click="deleteSite(dep)" class="bg-red-600/20 border border-red-600 hover:bg-red-600 text-red-500 hover:text-white px-3 py-1.5 rounded text-xs transition" title="Hapus">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
                     </div>
-                    <!-- LINK INI YANG PENTING: MENGARAH KE VIEWER -->
-                    <a :href="getViewerLink(dep.site_name)" target="_blank" class="bg-blue-600 text-white px-3 py-1 rounded text-xs">
-                        Buka Web
-                    </a>
+                    
+                    <div class="bg-black/30 p-2 rounded text-xs font-mono text-gray-400 flex justify-between items-center">
+                        <span class="truncate mr-2">{{ getViewerLink(dep.site_name) }}</span>
+                        <button @click="copyLink(getViewerLink(dep.site_name))" class="text-blue-400 hover:text-white"><i class="fa-regular fa-copy"></i></button>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- MODAL DOMAIN SETTINGS -->
+        <transition name="fade">
+            <div v-if="showModal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+                <div class="bg-gray-800 rounded-xl max-w-2xl w-full border border-gray-600 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                    <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-900">
+                        <h3 class="text-white font-bold"><i class="fa-brands fa-cloudflare text-orange-400"></i> Cloudflare Worker Code</h3>
+                        <button @click="showModal = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+                    </div>
+                    <div class="p-6 overflow-y-auto">
+                        <p class="text-sm text-gray-300 mb-4">
+                            Salin kode di bawah ini ke Cloudflare Workers Anda untuk menggunakan domain sendiri.
+                            Link <code>origin</code> sudah disesuaikan otomatis dengan project <b>{{ activeModalProject }}</b>.
+                        </p>
+                        <div class="relative">
+                            <textarea readonly class="w-full h-64 bg-black text-green-400 font-mono text-xs p-4 rounded border border-gray-700 outline-none resize-none" spellcheck="false">{{ generatedWorkerCode }}</textarea>
+                            <button @click="copyWorkerCode" class="absolute top-2 right-2 bg-blue-600 hover:bg-blue-500 text-white text-xs px-2 py-1 rounded">
+                                <i class="fa-regular fa-copy"></i> Copy
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-gray-900 border-t border-gray-700 text-right">
+                        <button @click="showModal = false" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm">Tutup</button>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
     </div>
 
     <script>
-        const { createApp, ref, onMounted } = Vue;
+        const { createApp, ref, onMounted, computed } = Vue;
+        
+        // --- KONFIGURASI SUPABASE ---
+        // Ganti dengan Key Publik Anda sendiri jika perlu, ini key anonim yang aman di expose jika RLS diatur benar
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtaGhyY2d2bmZqc2dlaWRleXV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUxMjgyOTEsImV4cCI6MjA4MDcwNDI5MX0.sCewtOfQWDNtWVjpn_aLxUcIWuaiwlSoeO07ORW5Znk';
         
-        let sbClient = null;
-        if(window.supabase) sbClient = window.supabase.createClient(SB_URL, SUPABASE_KEY);
-
         createApp({
             setup() {
                 const user = ref(null);
-                const email = ref(''); const password = ref('');
-                const isLoginMode = ref(true); const loading = ref(false);
-                const errorMsg = ref(''); const statusMsg = ref('');
-                const projectName = ref(''); const uploadType = ref('single');
-                const htmlInput = ref(null); const zipInput = ref(null);
+                const email = ref('');
+                const password = ref('');
+                const isLoginMode = ref(true);
+                const loading = ref(false);
+                const errorMsg = ref('');
+                const statusMsg = ref('');
+                
+                const projectName = ref('');
+                const uploadType = ref('zip'); // zip, single, code
+                const rawHtmlCode = ref('<!DOCTYPE html>\n<html>\n<head>\n<title>Web Saya</title>\n</head>\n<body>\n<h1>Halo Dunia!</h1>\n</body>\n</html>');
+                const htmlInput = ref(null);
+                const zipInput = ref(null);
+                const selectedFileName = ref('');
+                
                 const deployments = ref([]);
+                
+                // Modal Logic
+                const showModal = ref(false);
+                const activeModalProject = ref('');
+                const activeOriginUrl = ref('');
+
+                let sbClient = null;
+                if(window.supabase) sbClient = window.supabase.createClient(SB_URL, SUPABASE_KEY);
 
                 onMounted(async () => {
                     if(!sbClient) return;
                     const { data: { session } } = await sbClient.auth.getSession();
-                    if(session) { user.value = session.user; fetchDeployments(); }
-                    sbClient.auth.onAuthStateChange((_e, s) => { user.value = s?.user || null; if(user.value) fetchDeployments(); });
+                    if(session) { 
+                        user.value = session.user; 
+                        fetchDeployments(); 
+                    }
+                    sbClient.auth.onAuthStateChange((_e, s) => { 
+                        user.value = s?.user || null; 
+                        if(user.value) fetchDeployments(); 
+                        else deployments.value = [];
+                    });
                 });
 
                 const handleAuth = async () => {
@@ -160,76 +275,250 @@
                         const { data, error } = isLoginMode.value 
                             ? await sbClient.auth.signInWithPassword({ email: email.value, password: password.value })
                             : await sbClient.auth.signUp({ email: email.value, password: password.value });
+                        
                         if(error) throw error;
                         if(!isLoginMode.value && data.session) user.value = data.session.user;
-                        else if(!isLoginMode.value) { isLoginMode.value=true; alert('Cek email konfirmasi!'); }
+                        else if(!isLoginMode.value) { 
+                            isLoginMode.value=true; 
+                            alert('Silakan cek email untuk konfirmasi pendaftaran.'); 
+                        }
                     } catch(e) { errorMsg.value = e.message; }
                     finally { loading.value = false; }
                 };
 
+                const handleFile = (e) => {
+                    const file = e.target.files[0];
+                    if(file) selectedFileName.value = file.name;
+                };
+
                 const deploy = async () => {
                     if(!projectName.value) return;
-                    loading.value = true; statusMsg.value = 'Memulai...';
+                    loading.value = true; statusMsg.value = 'Inisialisasi...';
+                    
                     const userId = user.value.id;
-                    const basePath = `${userId}/${projectName.value}`;
+                    const basePath = `${userId}/${projectName.value}`; // Folder: user_id/slug/
                     
                     try {
-                        if(uploadType.value === 'single') {
+                        // 1. RAW CODE UPLOAD
+                        if(uploadType.value === 'code') {
+                            const blob = new Blob([rawHtmlCode.value], { type: 'text/html' });
+                            statusMsg.value = 'Mengupload kode...';
+                            await uploadToSupabase(basePath, 'index.html', blob, 'text/html');
+                        } 
+                        // 2. SINGLE HTML FILE
+                        else if(uploadType.value === 'single') {
                             const file = htmlInput.value.files[0];
-                            if(!file) throw new Error("Pilih HTML");
-                            statusMsg.value = 'Upload HTML...';
-                            await uploadFile(basePath, 'index.html', file, 'text/html');
-                        } else {
+                            if(!file) throw new Error("Pilih file HTML dulu");
+                            statusMsg.value = 'Mengupload file...';
+                            await uploadToSupabase(basePath, 'index.html', file, 'text/html');
+                        } 
+                        // 3. ZIP FILE
+                        else {
                             const file = zipInput.value.files[0];
-                            if(!file) throw new Error("Pilih ZIP");
-                            statusMsg.value = 'Extract ZIP...';
+                            if(!file) throw new Error("Pilih file ZIP dulu");
+                            statusMsg.value = 'Mengekstrak ZIP...';
+                            
                             const zip = new JSZip();
                             const contents = await zip.loadAsync(file);
-                            for(const f of Object.keys(contents.files)) {
+                            
+                            const fileNames = Object.keys(contents.files);
+                            let count = 0;
+                            
+                            for(const f of fileNames) {
                                 if(!contents.files[f].dir) {
-                                    const blob = await contents.files[f].async('blob');
-                                    let type = f.endsWith('.html') ? 'text/html' : 'auto';
-                                    await uploadFile(basePath, f, type);
+                                    const contentBlob = await contents.files[f].async('blob');
+                                    // Deteksi tipe file sederhana
+                                    let mime = 'application/octet-stream';
+                                    if(f.endsWith('.html')) mime = 'text/html';
+                                    else if(f.endsWith('.css')) mime = 'text/css';
+                                    else if(f.endsWith('.js')) mime = 'application/javascript';
+                                    else if(f.endsWith('.png')) mime = 'image/png';
+                                    else if(f.endsWith('.jpg')) mime = 'image/jpeg';
+                                    
+                                    statusMsg.value = `Upload: ${f} (${count+1}/${fileNames.length})`;
+                                    await uploadToSupabase(basePath, f, contentBlob, mime);
+                                    count++;
                                 }
                             }
                         }
 
-                        // Simpan Path Project (Bukan URL Langsung)
-                        await sbClient.from('deployments').insert([{
-                            user_id: userId, site_name: projectName.value, 
-                            public_url: `${userId}/${projectName.value}/index.html` // Simpan path saja
-                        }]);
+                        // Save Metadata to DB
+                        const { error } = await sbClient.from('deployments').upsert({
+                            user_id: userId, 
+                            site_name: projectName.value, 
+                            public_url: `${basePath}/index.html` 
+                        }, { onConflict: 'site_name, user_id' }); // Upsert agar bisa update
+                        
+                        if(error) throw error;
 
-                        alert('✅ Berhasil!');
+                        alert('✅ Deploy Berhasil!');
                         fetchDeployments();
                         projectName.value = '';
+                        selectedFileName.value = '';
+                        // Reset inputs
+                        if(htmlInput.value) htmlInput.value.value = '';
+                        if(zipInput.value) zipInput.value.value = '';
+
                     } catch(e) { 
-                        if(e.code === '23505') { fetchDeployments(); alert('✅ Update Berhasil'); }
-                        else alert(e.message); 
+                        alert('Gagal: ' + e.message); 
                     } finally { loading.value = false; statusMsg.value = ''; }
                 };
 
-                const uploadFile = async (path, name, file, type) => {
-                    await sbClient.storage.from(SB_BUCKET).upload(`${path}/${name}`, file, { upsert: true, contentType: type });
+                const uploadToSupabase = async (path, filename, body, type) => {
+                    const { error } = await sbClient.storage
+                        .from(SB_BUCKET)
+                        .upload(`${path}/${filename}`, body, { upsert: true, contentType: type });
+                    if(error) throw error;
                 };
 
                 const fetchDeployments = async () => {
-                    const { data } = await sbClient.from('deployments').select('*').eq('user_id', user.value.id).order('created_at', {ascending:false});
+                    const { data } = await sbClient
+                        .from('deployments')
+                        .select('*')
+                        .eq('user_id', user.value.id)
+                        .order('created_at', {ascending:false});
                     deployments.value = data || [];
                 };
 
-                // GENERATOR LINK ?VIEW=
+                // --- FEATURE: DELETE ---
+                const deleteSite = async (dep) => {
+                    if(!confirm(`Hapus website "${dep.site_name}"? Data tidak bisa dikembalikan.`)) return;
+                    
+                    try {
+                        // 1. Hapus file di Storage (Harus list dulu karena Supabase tidak ada delete folder recursive API public)
+                        const folderPath = `${user.value.id}/${dep.site_name}`;
+                        const { data: listFiles } = await sbClient.storage.from(SB_BUCKET).list(folderPath);
+                        
+                        if(listFiles && listFiles.length > 0) {
+                            const filesToRemove = listFiles.map(x => `${folderPath}/${x.name}`);
+                            await sbClient.storage.from(SB_BUCKET).remove(filesToRemove);
+                        }
+
+                        // 2. Hapus Record DB
+                        await sbClient.from('deployments').delete().eq('id', dep.id);
+                        
+                        fetchDeployments();
+                    } catch(e) {
+                        alert('Gagal hapus: ' + e.message);
+                    }
+                };
+
+                // --- FEATURE: BACKUP (DOWNLOAD ZIP) ---
+                const backupSite = async (dep) => {
+                    try {
+                        const folderPath = `${user.value.id}/${dep.site_name}`;
+                        // List file di folder
+                        const { data: listFiles, error } = await sbClient.storage.from(SB_BUCKET).list(folderPath);
+                        if(error) throw error;
+                        if(!listFiles || listFiles.length === 0) { alert('Folder kosong'); return; }
+
+                        const zip = new JSZip();
+                        
+                        // Loop download setiap file dan masukkan ke ZIP
+                        let count = 0;
+                        for(const file of listFiles) {
+                            const fileUrl = `${SB_URL}/storage/v1/object/public/${SB_BUCKET}/${folderPath}/${file.name}`;
+                            const response = await fetch(fileUrl);
+                            const blob = await response.blob();
+                            zip.file(file.name, blob);
+                            count++;
+                        }
+
+                        const content = await zip.generateAsync({ type: "blob" });
+                        saveAs(content, `${dep.site_name}-backup.zip`);
+
+                    } catch(e) {
+                        alert('Gagal backup: ' + e.message);
+                    }
+                };
+
+                // --- LINK HELPER ---
                 const getViewerLink = (siteName) => {
-                    // Mendapatkan URL saat ini (misal: domain.github.io)
                     const currentHost = window.location.origin + window.location.pathname;
+                    // Hapus query params dari current url jika ada
+                    const cleanHost = currentHost.split('?')[0];
                     const path = `${user.value.id}/${siteName}/index.html`;
-                    return `${currentHost}?view=${path}`;
+                    return `${cleanHost}?view=${path}`;
+                };
+
+                const copyLink = (text) => {
+                    navigator.clipboard.writeText(text);
+                    alert('Link disalin ke clipboard!');
+                };
+
+                // --- FEATURE: WORKER SETTINGS ---
+                const openDomainSettings = (dep) => {
+                    activeModalProject.value = dep.site_name;
+                    // URL Folder Storage Asli
+                    activeOriginUrl.value = `${SB_URL}/storage/v1/object/public/${SB_BUCKET}/${user.value.id}/${dep.site_name}/`;
+                    showModal.value = true;
+                };
+
+                // Kode Worker yang Digenerate Secara Dinamis
+                const generatedWorkerCode = computed(() => {
+                    return `export default {
+  async fetch(request) {
+    const url = new URL(request.url);
+    
+    // --- KONFIGURASI OTOMATIS ---
+    // Link Source Asli dari MiniHost Storage
+    const origin = "${activeOriginUrl.value}";
+    
+    // Logika Routing
+    let path = url.pathname;
+    if (path === '/' || path === '') {
+      path = 'index.html';
+    } else if (path.startsWith('/')) {
+      path = path.substring(1);
+    }
+    
+    const targetURL = origin + path + url.search;
+    
+    // --- CACHING & FETCHING ---
+    const cache = caches.default;
+    let response = await cache.match(targetURL);
+    
+    if (!response) {
+      console.log("Fetching from origin:", targetURL);
+      let fetched = await fetch(targetURL, {
+        headers: { "User-Agent": "MiniHost-Worker" }
+      });
+      
+      // Jika 404 pada file, coba index.html (SPA Fallback) - Opsional
+      if(fetched.status === 404 && !path.includes('.')) {
+          fetched = await fetch(origin + 'index.html');
+      }
+
+      response = new Response(fetched.body, fetched);
+      response.headers.set("Access-Control-Allow-Origin", "*");
+      
+      // Cache di Cloudflare Edge selama 1 jam
+      response.headers.set("Cache-Control", "public, max-age=3600");
+      
+      try {
+        if(fetched.status === 200) cache.put(targetURL, response.clone());
+      } catch (e) {}
+    }
+    
+    // Cache di Browser User selama 1 hari
+    response.headers.set("Cache-Control", "public, max-age=86400");
+    return response;
+  }
+}`;
+                });
+
+                const copyWorkerCode = () => {
+                    navigator.clipboard.writeText(generatedWorkerCode.value);
+                    alert('Kode Worker berhasil disalin!');
                 };
 
                 return {
-                    user, email, password, isLoginMode, handleAuth, loading, errorMsg, statusMsg,
-                    projectName, uploadType, htmlInput, zipInput, deploy, deployments, getViewerLink,
-                    sanitizeProjectName: () => projectName.value = projectName.value.replace(/[^a-z0-9-]/g, '').toLowerCase()
+                    user, email, password, isLoginMode, handleAuth, loading, errorMsg, statusMsg, logout: () => sbClient.auth.signOut(),
+                    projectName, uploadType, rawHtmlCode, htmlInput, zipInput, selectedFileName, handleFile, deploy,
+                    deployments, getViewerLink, copyLink, deleteSite, backupSite,
+                    sanitizeProjectName: () => projectName.value = projectName.value.replace(/[^a-z0-9-]/g, '').toLowerCase(),
+                    // Modal
+                    showModal, activeModalProject, openDomainSettings, generatedWorkerCode, copyWorkerCode
                 };
             }
         }).mount('#app');
