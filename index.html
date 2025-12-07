@@ -430,49 +430,52 @@
                     showModal.value = true;
                 };
 
-                // --- GENERATOR KODE WORKER (DIPERBAIKI) ---
-                // Menggunakan logic new Response dan routing yang lebih stabil untuk Cloudflare
+                // --- FIX: WORKER GENERATOR (Mencegah Raw Text) ---
                 const generatedWorkerCode = computed(() => {
                     return `export default {
   async fetch(request) {
     const url = new URL(request.url);
     
-    // 1. Definisikan Base URL dari Supabase (Folder Project)
+    // 1. Definisikan Base URL (Supabase Storage)
     const sourceBase = "${activeOriginUrl.value}";
 
-    // 2. Ambil path yang diminta user
+    // 2. Bersihkan & Tentukan Path
     let path = url.pathname;
+    if (path.startsWith('/')) path = path.substring(1);
+    if (path === '' || path.endsWith('/')) path += 'index.html';
 
-    // Hapus slash di awal path agar bisa digabung dengan sourceBase
-    if (path.startsWith('/')) {
-      path = path.substring(1);
-    }
-
-    // 3. Logika Indexing (Mirip Web Server Asli)
-    if (path === '' || path.endsWith('/')) {
-      path += 'index.html';
-    }
-
-    // Gabungkan menjadi URL lengkap Supabase
+    // 3. Fetch ke Supabase
     const targetUrl = sourceBase + path;
-
-    // 4. Lakukan Fetch ke Supabase
     let response = await fetch(targetUrl);
 
-    // 5. Fitur SPA Fallback
-    // Jika file tidak ditemukan (404) dan bukan file aset (tidak ada titik),
-    // coba ambil index.html
+    // 4. SPA Fallback (Jika 404, coba load index.html)
     if (response.status === 404 && !path.includes('.')) {
       const homeResponse = await fetch(sourceBase + 'index.html');
       if (homeResponse.status === 200) {
         response = homeResponse;
+        path = 'index.html'; // Update path agar deteksi MIME type benar
       }
     }
 
-    // 6. Buat Response Baru (PENTING untuk CORS & Header)
+    // 5. PENENTUAN CONTENT-TYPE (AGAR TIDAK JADI TEXT BIASA)
+    let mimeType = response.headers.get("Content-Type") || "text/plain";
+    
+    // Paksa browser merender HTML/CSS/JS
+    if (path.endsWith(".html")) mimeType = "text/html; charset=utf-8";
+    else if (path.endsWith(".css")) mimeType = "text/css";
+    else if (path.endsWith(".js")) mimeType = "application/javascript";
+    else if (path.endsWith(".json")) mimeType = "application/json";
+    else if (path.endsWith(".png")) mimeType = "image/png";
+    else if (path.endsWith(".jpg") || path.endsWith(".jpeg")) mimeType = "image/jpeg";
+
+    // 6. Buat Response Baru
     const newHeaders = new Headers(response.headers);
+    newHeaders.set("Content-Type", mimeType);
     newHeaders.set("Access-Control-Allow-Origin", "*");
-    newHeaders.set("Cache-Control", "public, max-age=3600");
+    
+    // Hapus header yang bikin konflik di Cloudflare
+    newHeaders.delete("Content-Encoding"); 
+    newHeaders.delete("X-Content-Type-Options");
 
     return new Response(response.body, {
       status: response.status,
