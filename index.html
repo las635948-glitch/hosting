@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MiniHost Advanced</title>
+    <title>MiniHost Advanced - Auto Fix CSS</title>
     
     <!-- CSS & Helper -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -337,10 +337,9 @@
                             }
                         }
 
-                        // 2. SIMPAN KE DATABASE (LOGIC DIPERBAIKI: HINDARI ONCONFLICT ERROR)
+                        // 2. SIMPAN KE DATABASE
                         statusMsg.value = 'Menyimpan data...';
                         
-                        // Cek apakah data sudah ada?
                         const { data: existingData } = await sbClient
                             .from('deployments')
                             .select('id')
@@ -351,14 +350,12 @@
                         let dbError = null;
 
                         if (existingData) {
-                            // Jika ada, UPDATE
                             const { error } = await sbClient.from('deployments').update({
                                 public_url: `${basePath}/index.html`,
-                                created_at: new Date() // update timestamp
+                                created_at: new Date()
                             }).eq('id', existingData.id);
                             dbError = error;
                         } else {
-                            // Jika tidak ada, INSERT
                             const { error } = await sbClient.from('deployments').insert({
                                 user_id: userId,
                                 site_name: projectName.value,
@@ -457,28 +454,25 @@
                     showModal.value = true;
                 };
 
-                // --- GENERATOR WORKER (FINAL FIX) ---
+                // --- GENERATOR WORKER (SUDAH DI-UPDATE SUPAYA CSS/JS JALAN) ---
                 const generatedWorkerCode = computed(() => {
                     return `export default {
-  async fetch(request) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const sourceBase = "${activeOriginUrl.value}";
 
+    // 1. LOGIC PATH
     let path = url.pathname;
-    // Bersihkan slash awal
     if (path.startsWith('/')) path = path.substring(1);
-    
-    // Routing Default ke Index
     if (path === '' || path.endsWith('/')) path += 'index.html';
 
     const targetUrl = sourceBase + path;
     
-    // 1. FETCH DARI SUPABASE
+    // 2. FETCH SUPABASE
     let response = await fetch(targetUrl);
 
-    // 2. HANDLE 404
+    // 3. HANDLE 404
     if (response.status === 404) {
-      // Jika bukan file aset, load index.html (SPA Fallback)
       if (!path.match(/\\.(css|js|png|jpg|jpeg|gif|ico|svg|json)$/)) {
         const homeResponse = await fetch(sourceBase + 'index.html');
         if (homeResponse.status === 200) {
@@ -487,28 +481,28 @@
         } else {
           return new Response("404: Page Not Found", { status: 404 });
         }
-      } else {
-         return response; // Biarkan 404 jika file CSS/JS hilang
       }
     }
 
-    // 3. SET MIME TYPE
-    let mimeType = response.headers.get("Content-Type");
+    // 4. BERSIHKAN SECURITY HEADER (PENTING!)
+    // Ini menghapus header 'Content-Security-Policy' yg memblokir CDN
+    const newHeaders = new Headers(response.headers);
+    newHeaders.delete("Content-Security-Policy");
+    newHeaders.delete("X-Content-Type-Options");
+    newHeaders.delete("X-Frame-Options");
+    newHeaders.delete("Strict-Transport-Security");
+
+    // 5. SET MIME TYPE + CHARSET UTF-8
+    let mimeType = newHeaders.get("Content-Type");
     
     if (path.endsWith(".html")) mimeType = "text/html; charset=utf-8";
     else if (path.endsWith(".css")) mimeType = "text/css; charset=utf-8";
     else if (path.endsWith(".js")) mimeType = "application/javascript; charset=utf-8";
     else if (path.endsWith(".json")) mimeType = "application/json";
-    else if (path.endsWith(".png")) mimeType = "image/png";
-    else if (path.endsWith(".jpg") || path.endsWith(".jpeg")) mimeType = "image/jpeg";
     else if (path.endsWith(".svg")) mimeType = "image/svg+xml";
 
-    const newHeaders = new Headers(response.headers);
     newHeaders.set("Content-Type", mimeType);
     newHeaders.set("Access-Control-Allow-Origin", "*");
-    
-    // Bersihkan header konflik
-    newHeaders.delete("X-Content-Type-Options");
 
     return new Response(response.body, {
       status: response.status,
